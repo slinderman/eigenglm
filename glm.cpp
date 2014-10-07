@@ -120,6 +120,12 @@ public:
         return (1.0 + I.array().exp()).log();
     }
 
+    VectorXd d_firing_rate_d_I(VectorXd I)
+    {
+        // Gradient of the firing rate with respect to I
+        return I.array().exp() / (1.0 + I.array().exp());
+    }
+
     double log_probability()
     {
         return 0.0;
@@ -210,7 +216,65 @@ public:
         nlin->resample();
     }
 
+    double d_ll_d_bias(SpikeTrain* s)
+    {
+        // Overloaded function if we don't have I_stim or I_net precomputed
+        MatrixXd I_imp = impulse->compute_current(s);
+        VectorXd I_net = I_imp * (A.array() * W.array()).matrix();
+        VectorXd I_stim = VectorXd::Constant(I_net.size(), 0);
 
+        return d_ll_d_bias(s, I_stim, I_net);
+    }
+
+    double d_ll_d_bias(SpikeTrain* s, VectorXd I_stim, VectorXd I_net)
+    {
+        // Compute the gradient of the log likelihood with respect to the
+        // First, compute the total current for this spike train.
+        VectorXd I = VectorXd(I_stim + I_net);
+
+        // Bias is a constant.
+        I = I.array() + bias->I_bias;
+
+        // Compute the firing rate and its log.
+        VectorXd lam = nlin->compute_firing_rate(I);
+        VectorXd loglam = lam.array().log();
+
+        // Now compute the gradients.
+        // TODO: Avoid divide by zero
+        VectorXd d_ll_d_lam = VectorXd::Constant(s->T, -s->dt).array() + s->S.array()/lam.array();
+        VectorXd d_lam_d_I = nlin->d_firing_rate_d_I(I);
+        double d_I_d_bias = 1.0;
+
+        // Multiply em up!
+        double d_ll_d_bias = d_ll_d_lam.dot(d_lam_d_I) * d_I_d_bias;
+
+        return d_ll_d_bias;
+    }
+
+    VectorXd d_ll_d_I_imp(SpikeTrain* s, double I_bias, VectorXd I_stim)
+    {
+        // Compute the gradient of the log likelihood with respect to the
+        // First, compute the total current for this spike train.
+        VectorXd I = VectorXd(I_bias + I_stim.array());
+
+        // Bias is a constant.
+        I = I.array() + bias->I_bias;
+
+        // Compute the firing rate and its log.
+        VectorXd lam = nlin->compute_firing_rate(I);
+        VectorXd loglam = lam.array().log();
+
+        // Now compute the gradients.
+        // TODO: Avoid divide by zero
+        VectorXd d_ll_d_lam = VectorXd::Constant(s->T, -s->dt).array() + s->S.array()/lam.array();
+        VectorXd d_lam_d_I = nlin->d_firing_rate_d_I(I);
+        double d_I_d_bias = 1.0;
+
+        // Multiply em up!
+        double d_ll_d_bias = d_ll_d_lam.dot(d_lam_d_I) * d_I_d_bias;
+
+        return d_ll_d_bias;
+    }
 
 };
 
