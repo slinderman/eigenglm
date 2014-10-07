@@ -1,0 +1,306 @@
+#include <iostream>
+#include <Eigen/Dense>
+#include <vector>
+using namespace Eigen;
+using namespace std;
+
+class SpikeTrain
+{
+public:
+    int N;
+    int T;
+    double dt;
+    VectorXd S;
+
+    //TODO: Stimuli
+
+    // Filtered spike train.
+    vector<MatrixXd> filtered_S;
+
+    SpikeTrain(int N, int T, double dt, VectorXd S, vector<MatrixXd> filtered_S)
+    {
+        SpikeTrain::N = N;
+        SpikeTrain::T = T;
+        SpikeTrain::dt = dt;
+        SpikeTrain::S = S;
+        SpikeTrain::filtered_S = filtered_S;
+    }
+};
+
+class Component
+{
+public:
+    //  Abstract base class for all components
+    //
+    virtual double log_probability() = 0;
+
+    // Resample the parameters of this component
+    virtual void resample() = 0;
+
+};
+
+
+class BiasCurrent : public Component
+{
+public:
+    double I_bias;
+
+    BiasCurrent(double bias)
+    {
+        I_bias = bias;
+    }
+
+    double log_probability()
+    {
+        return 0.0;
+    }
+
+    void resample()
+    {
+    }
+};
+
+class LinearImpulseCurrent : public Component
+{
+public:
+    // A vector of impulse response weights for each presynaptic neuron.
+    vector<VectorXd> w_ir;
+
+    LinearImpulseCurrent(int N, int B)
+    {
+        // Initialize impulse response weights.
+        for (int n=0; n < N; n++)
+        {
+            w_ir.push_back(VectorXd::Random(B));
+        }
+    }
+
+    MatrixXd compute_current(SpikeTrain* st)
+    {
+        MatrixXd I_imp = MatrixXd::Random(st->T, st->N);
+
+        // Each column of the output matrix is a matrix vector product
+        // of the filtered spike train for neuron n and the impulse
+        // response weights for that connection.
+        for (int n=0; n < st->N; n++)
+        {
+            I_imp.col(n) = st->filtered_S[n] * w_ir[n];
+        }
+        return I_imp;
+    }
+
+    double log_probability()
+    {
+        return 0.0;
+    }
+
+    void resample()
+    {
+    }
+};
+
+//class StimulusCurrent : public Component
+//{
+//public:
+//
+//    double log_probability();
+//
+//    void resample();
+//};
+//
+//class NoStimulusCurrent : StimulusCurrent
+//{
+//}
+
+class SmoothRectLinearLink : public Component
+{
+public:
+    VectorXd compute_firing_rate(VectorXd I)
+    {
+        return (1.0 + I.array().exp()).log();
+    }
+
+    double log_probability()
+    {
+        return 0.0;
+    }
+
+    void resample() {}
+};
+
+class Glm : public Component
+{
+public:
+    // List of datasets
+    std::vector<SpikeTrain*> spike_trains;
+
+    // Subcomponents
+    BiasCurrent *bias;
+    LinearImpulseCurrent *impulse;
+    SmoothRectLinearLink *nlin;
+    VectorXd A;
+    VectorXd W;
+
+    Glm(BiasCurrent *bias,
+        LinearImpulseCurrent *impulse,
+        VectorXd A,
+        VectorXd W,
+        SmoothRectLinearLink *link)
+    {
+        Glm::bias = bias;
+        Glm::impulse = impulse;
+        Glm::nlin = link;
+        Glm::A = A;
+        Glm::W = W;
+
+    }
+
+    void add_spike_train(SpikeTrain *s)
+    {
+        spike_trains.push_back(s);
+    }
+
+    double log_likelihood()
+    {
+        double ll = 0;
+        for (vector<SpikeTrain*>::iterator s = spike_trains.begin();
+             s != spike_trains.end();
+             ++s)
+        {
+            // Compute the total current for this spike train.
+            VectorXd I = VectorXd::Constant((*s)->T, 0.0);
+
+            // Bias is a constant.
+            I = I.array() + bias->I_bias;
+
+            // Add the weighted impulse responses
+            MatrixXd I_imp = impulse->compute_current(*s);
+            I += I_imp * (A.array() * W.array()).matrix();
+
+            // Compute the firing rate and its log.
+            VectorXd lam = nlin->compute_firing_rate(I);
+            VectorXd loglam = lam.array().log();
+
+            // Compute the Poisson likelihood.
+            ll += -(*s)->dt * lam.sum() + (*s)->S.dot(loglam);
+
+        }
+        return ll;
+    }
+
+    double log_probability()
+    {
+        double lp = 0.0;
+
+        // Add subcomponent priors
+        lp += bias->log_probability();
+        lp += impulse->log_probability();
+        lp += nlin->log_probability();
+
+        // Add the likelihood.
+        lp += log_likelihood();
+
+        return lp;
+    }
+
+    void resample()
+    {
+        // Call subcomponent resample methods.
+        bias->resample();
+        nlin->resample();
+    }
+
+
+
+};
+
+class Population : Component
+{
+public:
+    vector<Glm*> glms;
+
+    void add_glm(Glm *g)
+    {
+        glms.push_back(g);
+    }
+
+    double log_probability()
+    {
+        double lp = 0.0;
+        for (vector<Glm*>::iterator g = glms.begin();
+             g != glms.end();
+             ++g)
+        {
+            lp += (*g)->log_probability();
+        }
+        return lp;
+    }
+
+    void resample()
+    {
+    }
+
+};
+
+
+int main()
+{
+    // Make some fake data sets.
+    vector<SpikeTrain*> spike_trains;
+    int N = 2;
+    int B = 5;
+    for (int m=0; m < 10; m++)
+    {
+        int T = 10;
+        double dt = 0.1;
+        VectorXd S = (1 + VectorXd::Random(T).array()) * 10;
+
+        vector<MatrixXd> filtered_S;
+        for (int n=0; n<N; n++)
+        {
+            filtered_S.push_back(MatrixXd::Random(T,B));
+        }
+
+        SpikeTrain *s = new SpikeTrain(N, T, dt, S, filtered_S);
+        spike_trains.push_back(s);
+    }
+
+    // Make a network
+    MatrixXd A = MatrixXd::Constant(N,N,1);
+    MatrixXd W = MatrixXd::Constant(N,N,1);
+
+    // Make a population of GLMs
+    Population population = Population();
+
+    for (int n=0; n<N; n++)
+    {
+        BiasCurrent *bias = new BiasCurrent(1.0);
+        LinearImpulseCurrent *impulse = new LinearImpulseCurrent(N,B);
+        SmoothRectLinearLink *link = new SmoothRectLinearLink();
+        Glm *g = new Glm(bias, impulse, A.col(n), W.col(n), link);
+
+        // Add data
+        for (vector<SpikeTrain*>::iterator s = spike_trains.begin();
+                 s != spike_trains.end();
+                 ++s)
+        {
+            g->add_spike_train(*s);
+        }
+
+        // Add GLM to population.
+        population.add_glm(g);
+    }
+
+
+
+    // Compute log likelihood
+//    cout << "ll = " << g->log_likelihood() << endl;
+    cout << "lp = " << population.log_probability() << endl;
+
+    // Cleanup?
+//    delete spike_trains;
+//    delete bias;
+//    delete link;
+//    delete g;
+}
+
