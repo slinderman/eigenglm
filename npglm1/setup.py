@@ -9,6 +9,6 @@ from Cython.Build import cythonize
 setup(
     name = "rectangleapp",
     # ext_modules=cythonize('*.pyx')
-    ext_modules=cythonize('pynpglm.pyx')
+    ext_modules=cythonize('pynpglm3.pyx')
 )
 
