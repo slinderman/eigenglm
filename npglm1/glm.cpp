@@ -19,21 +19,34 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<Ma
 }
 
 
-BiasCurrent::BiasCurrent(double bias)
+BiasCurrent::BiasCurrent(Glm* glm, double bias)
 {
+    parent = glm;
     I_bias = bias;
 }
-
-//BiasCurrent::~BiasCurrent() {}
 
 double BiasCurrent::log_probability()
 {
     return 0.0;
 }
 
-void BiasCurrent::resample()
+void BiasCurrent::coord_descent_step(double momentum)
 {
+    double grad = 0;
+
+    // Get the gradient with respect to each spike train
+    for (vector<SpikeTrain*>::iterator s = parent->spike_trains.begin();
+         s != parent->spike_trains.end();
+         ++s)
+    {
+        grad += parent->d_ll_d_bias(*s);
+    }
+
+    // Update bias
+    I_bias += momentum * grad;
 }
+
+void BiasCurrent::resample() {}
 
 LinearImpulseCurrent::LinearImpulseCurrent(int N, int B)
 {
@@ -56,15 +69,6 @@ MatrixXd LinearImpulseCurrent::compute_current(SpikeTrain* st)
         I_imp.col(n) = st->filtered_S[n] * w_ir[n];
     }
     return I_imp;
-}
-
-double LinearImpulseCurrent::log_probability()
-{
-    return 0.0;
-}
-
-void LinearImpulseCurrent::resample()
-{
 }
 
 //class StimulusCurrent : public Component
@@ -92,30 +96,40 @@ VectorXd SmoothRectLinearLink::d_firing_rate_d_I(VectorXd I)
     return I.array().exp() / (1.0 + I.array().exp());
 }
 
-double SmoothRectLinearLink::log_probability()
+Glm::Glm(int N, int D_imp)
 {
-    return 0.0;
-}
+    // Standard GLM
+    Glm::bias = new BiasCurrent(this, 1.0);
+    Glm::impulse = new LinearImpulseCurrent(N, D_imp);
+    Glm::nlin = new SmoothRectLinearLink();
 
-void SmoothRectLinearLink::resample() {}
-
-Glm::Glm(BiasCurrent *bias,
-        LinearImpulseCurrent *impulse,
-        VectorXd A,
-        VectorXd W,
-        SmoothRectLinearLink *link)
-{
-    Glm::bias = bias;
-    Glm::impulse = impulse;
-    Glm::nlin = link;
-    Glm::A = A;
-    Glm::W = W;
-
+    // Make a network
+    Glm::A = VectorXd::Ones(N);
+    Glm::W = VectorXd::Ones(N);
 }
 
 void Glm::add_spike_train(SpikeTrain *s)
 {
     spike_trains.push_back(s);
+}
+
+void Glm::firing_rate(SpikeTrain* s, VectorXd *fr)
+{
+//    fr.array() *= 0;
+
+    // Compute the total current for this spike train.
+    VectorXd I = VectorXd::Constant(s->T, 0.0);
+
+    // Bias is a constant.
+    I = I.array() + bias->I_bias;
+
+    // Add the weighted impulse responses
+    MatrixXd I_imp = impulse->compute_current(s);
+    I += I_imp * (A.array() * W.array()).matrix();
+
+    // Compute the firing rate and its log.
+    *fr = nlin->compute_firing_rate(I);
+
 }
 
 double Glm::log_likelihood()
@@ -125,18 +139,20 @@ double Glm::log_likelihood()
          s != spike_trains.end();
          ++s)
     {
-        // Compute the total current for this spike train.
-        VectorXd I = VectorXd::Constant((*s)->T, 0.0);
-
-        // Bias is a constant.
-        I = I.array() + bias->I_bias;
-
-        // Add the weighted impulse responses
-        MatrixXd I_imp = impulse->compute_current(*s);
-        I += I_imp * (A.array() * W.array()).matrix();
-
-        // Compute the firing rate and its log.
-        VectorXd lam = nlin->compute_firing_rate(I);
+//        // Compute the total current for this spike train.
+//        VectorXd I = VectorXd::Constant((*s)->T, 0.0);
+//
+//        // Bias is a constant.
+//        I = I.array() + bias->I_bias;
+//
+//        // Add the weighted impulse responses
+//        MatrixXd I_imp = impulse->compute_current(*s);
+//        I += I_imp * (A.array() * W.array()).matrix();
+//
+//        // Compute the firing rate and its log.
+//        VectorXd lam = nlin->compute_firing_rate(I);
+        VectorXd lam = VectorXd::Constant((*s)->T, 0);
+        Glm::firing_rate(*s, &lam);
         VectorXd loglam = lam.array().log();
 
         // Compute the Poisson likelihood.
@@ -161,10 +177,19 @@ double Glm::log_probability()
     return lp;
 }
 
+void Glm::coord_descent_step(double momentum)
+{
+    // Call subcomponent resample methods.
+    bias->coord_descent_step(momentum);
+//    impulse->coord_descent_step();
+//    nlin->coord_descent_step();
+}
+
 void Glm::resample()
 {
     // Call subcomponent resample methods.
     bias->resample();
+    impulse->resample();
     nlin->resample();
 }
 
@@ -291,10 +316,7 @@ int main()
 
     for (int n=0; n<N; n++)
     {
-        BiasCurrent *bias = new BiasCurrent(1.0);
-        LinearImpulseCurrent *impulse = new LinearImpulseCurrent(N,B);
-        SmoothRectLinearLink *link = new SmoothRectLinearLink();
-        Glm *g = new Glm(bias, impulse, A.col(n), W.col(n), link);
+        Glm *g = new Glm(N, B);
 
         // Add data
         for (vector<SpikeTrain*>::iterator s = spike_trains.begin();

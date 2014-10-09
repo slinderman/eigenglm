@@ -46,36 +46,36 @@ public:
 
 };
 */
-
-class NpBiasCurrent
-{
-public:
-    BiasCurrent* biasCurrent;
-
-    NpBiasCurrent(double bias)
-    {
-        biasCurrent = new BiasCurrent(bias);
-    }
-
-    ~NpBiasCurrent()
-    {
-        if (biasCurrent)
-        {
-            delete biasCurrent;
-        }
-    }
-
-    double log_probability()
-    {
-        return biasCurrent->log_probability();
-    }
-
-    void resample()
-    {
-        biasCurrent->resample();
-    }
-
-};
+//
+//class NpBiasCurrent
+//{
+//public:
+//    BiasCurrent* biasCurrent;
+//
+//    NpBiasCurrent(double bias)
+//    {
+//        biasCurrent = new BiasCurrent(bias);
+//    }
+//
+//    ~NpBiasCurrent()
+//    {
+//        if (biasCurrent)
+//        {
+//            delete biasCurrent;
+//        }
+//    }
+//
+//    double log_probability()
+//    {
+//        return biasCurrent->log_probability();
+//    }
+//
+//    void resample()
+//    {
+//        biasCurrent->resample();
+//    }
+//
+//};
 
 /*
 class LinearImpulseCurrent : public Component
@@ -121,14 +121,44 @@ class NpGlm
 public:
     Glm* glm;
 
-    NpGlm()
+    NpGlm(int N, int D_imp)
     {
-        glm = new Glm();
+        glm = new Glm(N, D_imp);
     }
 
     void add_spike_train(NpSpikeTrain *s)
     {
         glm->add_spike_train(s->get_spike_train());
+    }
+
+    void firing_rate(NpSpikeTrain* s, double* fr)
+    {
+        NPVector<double> np_fr(fr, s->get_spike_train()->T);
+        VectorXd vec_fr;
+        glm->firing_rate(s->get_spike_train(), &vec_fr);
+
+        // Copy the result back to fr
+        np_fr = vec_fr;
+    }
+
+    double log_likelihood()
+    {
+        return glm->log_likelihood();
+    }
+
+    double log_probability()
+    {
+        return glm->log_probability();
+    }
+
+    void coord_descent_step(double momentum)
+    {
+        glm->coord_descent_step(momentum);
+    }
+
+    double get_bias()
+    {
+        return glm->bias->I_bias;
     }
 
 };

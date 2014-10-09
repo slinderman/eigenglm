@@ -4,6 +4,7 @@
 using namespace Eigen;
 using namespace std;
 
+
 class SpikeTrain
 {
 public:
@@ -35,17 +36,21 @@ public:
     virtual ~Component() {}
 };
 
+// Forward define the GLM class
+class Glm;
 
-//class BiasCurrent : public Component
-class BiasCurrent 
+class BiasCurrent : public Component
+//class BiasCurrent
 {
+    Glm* parent;
 public:
     double I_bias;
 
-    BiasCurrent(double bias);
+    BiasCurrent(Glm* glm, double bias);
     ~BiasCurrent() {}
 
     double log_probability();
+    void coord_descent_step(double momentum);
     void resample();
 };
 
@@ -59,8 +64,8 @@ public:
 
     MatrixXd compute_current(SpikeTrain* st);
 
-    double log_probability();
-    void resample();
+    double log_probability() {return 0.0; }
+    void resample() {}
 };
 
 //class StimulusCurrent : public Component
@@ -83,8 +88,8 @@ public:
 
     VectorXd d_firing_rate_d_I(VectorXd I);
 
-    double log_probability();
-    void resample();
+    double log_probability() {return 0.0; }
+    void resample() {}
 };
 
 class Glm : public Component
@@ -100,15 +105,11 @@ public:
     VectorXd A;
     VectorXd W;
 
-    Glm() {}
-
-    Glm(BiasCurrent *bias,
-        LinearImpulseCurrent *impulse,
-        VectorXd A,
-        VectorXd W,
-        SmoothRectLinearLink *link);
+    Glm(int N, int D_imp);
 
     void add_spike_train(SpikeTrain *s);
+
+    void firing_rate(SpikeTrain *s, VectorXd *fr);
 
     double log_likelihood();
 
@@ -121,6 +122,8 @@ public:
     VectorXd d_ll_d_I_imp(SpikeTrain* s, int n);
 
     VectorXd d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim);
+
+    void coord_descent_step(double momentum);
 
     void resample();
 };
