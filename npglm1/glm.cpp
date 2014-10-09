@@ -150,7 +150,8 @@ double Glm::log_likelihood()
 //
 //        // Compute the firing rate and its log.
 //        VectorXd lam = nlin->compute_firing_rate(I);
-        VectorXd lam = VectorXd::Constant((*s)->T, 0);
+//        VectorXd lam = VectorXd::Constant((*s)->T, 0);
+        VectorXd lam;
         Glm::firing_rate(*s, &lam);
         VectorXd loglam = lam.array().log();
 
