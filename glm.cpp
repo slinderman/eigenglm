@@ -22,6 +22,8 @@ BiasCurrent::BiasCurrent(double bias)
     I_bias = bias;
 }
 
+//BiasCurrent::~BiasCurrent() {}
+
 double BiasCurrent::log_probability()
 {
     return 0.0;

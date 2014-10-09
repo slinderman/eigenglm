@@ -1,25 +1,24 @@
 #include <iostream>
-#include <Eigen/Dense>
 #include <vector>
-using namespace Eigen;
+
+#include "nptypes.h"
+#include "glm.h"
+
+// Wrapper for the EigenGlm that takes numpy maps
+using namespace nptypes;
 using namespace std;
 
-class SpikeTrain
+class NpSpikeTrain
 {
+
 public:
-    int N;
-    int T;
-    double dt;
-    VectorXd S;
-
-    //TODO: Stimuli
-
-    // Filtered spike train.
-    vector<MatrixXd> filtered_S;
-
-    SpikeTrain(int N, int T, double dt, VectorXd S, vector<MatrixXd> filtered_S);
+    NpSpikeTrain(int N, int T, double dt, double* S_buffer)
+    {
+        NPVector<double> S(S_buffer, T);
+    }
 };
 
+/*
 class Component
 {
 public:
@@ -30,24 +29,40 @@ public:
     // Resample the parameters of this component
     virtual void resample() = 0;
 
-    // Destructor
-    virtual ~Component() {}
 };
+*/
 
-
-//class BiasCurrent : public Component
-class BiasCurrent 
+class NpBiasCurrent
 {
 public:
-    double I_bias;
+    BiasCurrent* biasCurrent;
 
-    BiasCurrent(double bias);
-    ~BiasCurrent() {}
+    NpBiasCurrent(double bias)
+    {
+        biasCurrent = new BiasCurrent(bias);
+    }
 
-    double log_probability();
-    void resample();
+    ~NpBiasCurrent()
+    {
+        if (biasCurrent)
+        {
+            delete biasCurrent;
+        }
+    }
+
+    double log_probability()
+    {
+        return biasCurrent->log_probability();
+    }
+
+    void resample()
+    {
+        biasCurrent->resample();
+    }
+
 };
 
+/*
 class LinearImpulseCurrent : public Component
 {
 public:
@@ -132,3 +147,4 @@ public:
     double log_probability();
     void resample();
 };
+*/
