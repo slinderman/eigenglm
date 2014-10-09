@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 # Create a spike train
 T = 100
 N = 2
-dt = 0.001
+dt = 1.0
 S = np.random.randint(0,10,T).astype(np.double)
 
 # Filter the spike train

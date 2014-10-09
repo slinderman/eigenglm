@@ -156,7 +156,7 @@ double Glm::log_likelihood()
         VectorXd loglam = lam.array().log();
 
         // Compute the Poisson likelihood.
-        ll += -(*s)->dt * lam.sum() + (*s)->S.dot(loglam);
+        ll += -1 * (*s)->dt * lam.sum() + (*s)->S.dot(loglam);
 
     }
     return ll;
@@ -218,7 +218,7 @@ double Glm::d_ll_d_bias(SpikeTrain* s, VectorXd I_stim, VectorXd I_net)
 
     // Now compute the gradients.
     // TODO: Avoid divide by zero
-    VectorXd d_ll_d_lam = VectorXd::Constant(s->T, -s->dt).array() + s->S.array()/lam.array();
+    VectorXd d_ll_d_lam = -1*(s->dt) + s->S.array()/lam.array();
     VectorXd d_lam_d_I = nlin->d_firing_rate_d_I(I);
     double d_I_d_bias = 1.0;
 
