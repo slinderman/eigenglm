@@ -33,8 +33,7 @@ namespace glm {
     }
 
     /**
-     * Compute the log likelihood of a Poisson GLM with a soft rectified linear
-     * inverse link function.
+     * Compute the current from one presynaptic neuron.
      */
     template <typename Type>
     void compute_I_net(int T, int D_imp, Type* ir, Type* w_ir, Type* I_net)
@@ -46,8 +45,28 @@ namespace glm {
 
         np_I_net = np_ir * np_w_ir;
     }
+
+    /**
+     * Compute the current from one presynaptic neuron.
+     */
+    template <typename Type>
+    void compute_all_I_net(int T, int N, int D_imp, vector<Type*> irs, vector<Type*> w_irs, vector<Type*> I_nets)
+    {
+        // Call for each neuron n.
+        for (int n=0; n<N; n++)
+        {
+            compute_I_net(T, D_imp, irs[n], w_irs[n], I_nets[n]);
+        }
+//        NPMatrix<Type> np_ir(ir, T, D_imp);
+//        NPVector<Type> np_w_ir(w_ir, D_imp);
+//        NPVector<Type> np_I_net(I_net, T);
+//
+//        np_I_net = np_ir * np_w_ir;
+    }
 }
 
+
+using namespace std;
 // Dummy class to expose the template functions.
 // This is required because Cython only supports template classes.
 template <typename Type>
@@ -59,5 +78,8 @@ class NPGlm
 
     static void compute_I_net(int T, int D_imp, Type* ir, Type* w_ir, Type* I_net)
     { glm::compute_I_net(T, D_imp, ir, w_ir, I_net); }
+
+    static void compute_all_I_net(int T, int N, int D_imp, vector<Type*> irs, vector<Type*> w_irs, vector<Type*> I_nets)
+    { glm::compute_all_I_net(T, N, D_imp, irs, w_irs, I_nets); }
 
 };
