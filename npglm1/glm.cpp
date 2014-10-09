@@ -129,7 +129,6 @@ void Glm::firing_rate(SpikeTrain* s, VectorXd *fr)
 
     // Compute the firing rate and its log.
     *fr = nlin->compute_firing_rate(I);
-
 }
 
 double Glm::log_likelihood()

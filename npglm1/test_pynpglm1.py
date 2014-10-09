@@ -25,19 +25,22 @@ print glm.log_likelihood()
 print glm.log_probability()
 
 plt.figure()
-fr = np.empty(T)
-glm.firing_rate(st, fr)
-plt.plot(np.arange(T), fr)
+fr = glm.get_firing_rate(st)
+lns = plt.plot(np.arange(T), fr)
+plt.ion()
 plt.show()
-print fr
-#
-# emp_rate = np.sum(S)/T
-# print "Empirical rate: ", emp_rate, " spks/bin"
-# N_steps = 10000
-# for n in range(N_steps):
-#     glm.coord_descent_step(0.001)
-#     rate = np.log(1. + np.exp(glm.bias))
-#     ll = glm.log_likelihood()
-#
-#     if np.mod(n, 25) == 0:
-#         print "Iter: ", n, "\Rate: ", rate, " spks/bin\tLL:", ll
+
+raw_input("Press any key to continue...\n")
+
+emp_rate = np.sum(S)/T
+print "Empirical rate: ", emp_rate, " spks/bin"
+N_steps = 1000
+for n in range(N_steps):
+    glm.coord_descent_step(0.001)
+    rate = np.log(1. + np.exp(glm.bias))
+    ll = glm.log_likelihood()
+
+    if np.mod(n, 25) == 0:
+        print "Iter: ", n, "\Rate: ", rate, " spks/bin\tLL:", ll
+        plt.plot(np.arange(T), glm.get_firing_rate(st))
+        plt.pause(0.001)

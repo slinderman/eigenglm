@@ -3,6 +3,9 @@
 # distutils: libraries = stdc++
 # distutils: extra_compile_args = -std=c++11
 
+import numpy as np
+cimport numpy as np
+
 from libcpp.vector cimport vector
 
 cdef extern from "npglm.h":
@@ -36,12 +39,12 @@ cdef class PyNpSpikeTrain:
 
     def __cinit__(self, int N, int T, double dt, double[::1] S, int D_imp, list filtered_S):
         # Store the values locally
-        T = T
-        N = N
-        dt = dt
-        S = S
-        D_imp = D_imp
-        filtered_S = filtered_S
+        self.T = T
+        self.N = N
+        self.dt = dt
+        self.S = S
+        self.D_imp = D_imp
+        self.filtered_S = filtered_S
 
         # Cast the list to a cpp vector
         cdef vector[double*] filtered_S_vect
@@ -92,8 +95,9 @@ cdef class PyNpGlm:
         self.thisptr.coord_descent_step(momentum)
 
     def get_firing_rate(self, PyNpSpikeTrain st):
-        cdef double[::1] fr = np.zeros(st.T)
-        self.thisptr.firing_rate(st.thisptr, &fr[0])
+        cdef double[::1] fr = np.zeros(st.T, dtype=np.double)
+        self.thisptr.get_firing_rate(st.thisptr, &fr[0])
+        return fr
 
     property bias:
         def __get__(self): return self.thisptr.get_bias()
