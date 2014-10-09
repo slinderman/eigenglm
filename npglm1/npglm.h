@@ -10,11 +10,26 @@ using namespace std;
 
 class NpSpikeTrain
 {
-
+    SpikeTrain* st;
 public:
-    NpSpikeTrain(int N, int T, double dt, double* S_buffer)
+    NpSpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vector<double*> filtered_S_buffers)
     {
         NPVector<double> S(S_buffer, T);
+
+        vector<MatrixXd> filtered_S;
+        for (int n=0; n<N; n++)
+        {
+            // TODO: Get filtered_S size
+            NPMatrix<double> fS(filtered_S_buffers[n], T, D_imp);
+            filtered_S.push_back(fS);
+        }
+
+        st = new SpikeTrain(N, T, dt, S, D_imp, filtered_S);
+    }
+
+    SpikeTrain* get_spike_train()
+    {
+        return st;
     }
 };
 
@@ -100,43 +115,25 @@ public:
     double log_probability();
     void resample();
 };
-
-class Glm : public Component
+*/
+class NpGlm
 {
 public:
-    // List of datasets
-    std::vector<SpikeTrain*> spike_trains;
+    Glm* glm;
 
-    // Subcomponents
-    BiasCurrent *bias;
-    LinearImpulseCurrent *impulse;
-    SmoothRectLinearLink *nlin;
-    VectorXd A;
-    VectorXd W;
+    NpGlm()
+    {
+        glm = new Glm();
+    }
 
-    Glm(BiasCurrent *bias,
-        LinearImpulseCurrent *impulse,
-        VectorXd A,
-        VectorXd W,
-        SmoothRectLinearLink *link);
+    void add_spike_train(NpSpikeTrain *s)
+    {
+        glm->add_spike_train(s->get_spike_train());
+    }
 
-    void add_spike_train(SpikeTrain *s);
-
-    double log_likelihood();
-
-    double log_probability();
-
-    double d_ll_d_bias(SpikeTrain* s);
-
-    double d_ll_d_bias(SpikeTrain* s, VectorXd I_stim, VectorXd I_net);
-
-    VectorXd d_ll_d_I_imp(SpikeTrain* s, int n);
-
-    VectorXd d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim);
-
-    void resample();
 };
 
+/*
 class Population : Component
 {
 public:

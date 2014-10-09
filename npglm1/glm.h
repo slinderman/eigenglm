@@ -15,9 +15,10 @@ public:
     //TODO: Stimuli
 
     // Filtered spike train.
+    int D_imp;
     vector<MatrixXd> filtered_S;
 
-    SpikeTrain(int N, int T, double dt, VectorXd S, vector<MatrixXd> filtered_S);
+    SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S);
 };
 
 class Component
@@ -98,6 +99,8 @@ public:
     SmoothRectLinearLink *nlin;
     VectorXd A;
     VectorXd W;
+
+    Glm() {}
 
     Glm(BiasCurrent *bias,
         LinearImpulseCurrent *impulse,

@@ -7,12 +7,14 @@
 using namespace Eigen;
 using namespace std;
 
-SpikeTrain::SpikeTrain(int N, int T, double dt, VectorXd S, vector<MatrixXd> filtered_S)
+SpikeTrain::SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S)
 {
     SpikeTrain::N = N;
     SpikeTrain::T = T;
     SpikeTrain::dt = dt;
     SpikeTrain::S = S;
+
+    SpikeTrain::D_imp = D_imp;
     SpikeTrain::filtered_S = filtered_S;
 }
 
@@ -276,7 +278,7 @@ int main()
             filtered_S.push_back(MatrixXd::Random(T,B));
         }
 
-        SpikeTrain *s = new SpikeTrain(N, T, dt, S, filtered_S);
+        SpikeTrain *s = new SpikeTrain(N, T, dt, S, B, filtered_S);
         spike_trains.push_back(s);
     }
 

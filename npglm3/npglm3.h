@@ -47,7 +47,7 @@ namespace glm {
     }
 
     /**
-     * Compute the current from one presynaptic neuron.
+     * Compute the current from a list of N presynaptic neurons.
      */
     template <typename Type>
     void compute_all_I_net(int T, int N, int D_imp, vector<Type*> irs, vector<Type*> w_irs, vector<Type*> I_nets)
