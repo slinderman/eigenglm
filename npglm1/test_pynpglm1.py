@@ -15,5 +15,8 @@ for n in range(N):
 
 st = pe.PyNpSpikeTrain(N, T, dt,  S, D_imp, filtered_S)
 
+glm = pe.PyNpGlm()
+glm.add_spike_train(st)
+
 print st
 

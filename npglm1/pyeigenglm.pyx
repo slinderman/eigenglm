@@ -16,7 +16,7 @@ cdef extern from "npglm.h":
 
     cdef cppclass NpGlm:
         NpGlm() except +
-        void add_spike_train(NpSpikeTrain *s);
+        void add_spike_train(NpSpikeTrain *s)
 
         
 cdef class PyNpSpikeTrain:
