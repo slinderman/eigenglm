@@ -131,16 +131,6 @@ public:
         glm->add_spike_train(s->get_spike_train());
     }
 
-    void firing_rate(NpSpikeTrain* s, double* fr)
-    {
-        NPVector<double> np_fr(fr, s->get_spike_train()->T);
-        VectorXd vec_fr;
-        glm->firing_rate(s->get_spike_train(), &vec_fr);
-
-        // Copy the result back to fr
-        np_fr = vec_fr;
-    }
-
     double log_likelihood()
     {
         return glm->log_likelihood();
@@ -155,6 +145,17 @@ public:
     {
         glm->coord_descent_step(momentum);
     }
+
+    void get_firing_rate(NpSpikeTrain* s, double* fr)
+    {
+        NPVector<double> np_fr(fr, s->get_spike_train()->T);
+        VectorXd vec_fr;
+        glm->firing_rate(s->get_spike_train(), &vec_fr);
+
+        // Copy the result back to fr
+        np_fr = vec_fr;
+    }
+
 
     double get_bias()
     {

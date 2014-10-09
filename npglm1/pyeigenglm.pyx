@@ -17,17 +17,31 @@ cdef extern from "npglm.h":
     cdef cppclass NpGlm:
         NpGlm(int, int) except +
         void add_spike_train(NpSpikeTrain *s)
-        void firing_rate(NpSpikeTrain *s, double* fr)
         double log_likelihood()
         double log_probability()
         void coord_descent_step(double momentum)
 
+        void get_firing_rate(NpSpikeTrain *s, double* fr)
         double get_bias()
 
         
 cdef class PyNpSpikeTrain:
     cdef NpSpikeTrain *thisptr      # hold a C++ instance which we're wrapping
+    cdef int T
+    cdef int N
+    cdef double dt
+    cdef double[::1] S
+    cdef int D_imp
+    cdef list filtered_S
+
     def __cinit__(self, int N, int T, double dt, double[::1] S, int D_imp, list filtered_S):
+        # Store the values locally
+        T = T
+        N = N
+        dt = dt
+        S = S
+        D_imp = D_imp
+        filtered_S = filtered_S
 
         # Cast the list to a cpp vector
         cdef vector[double*] filtered_S_vect
@@ -68,9 +82,6 @@ cdef class PyNpGlm:
     def add_spike_train(self, PyNpSpikeTrain st):
         self.thisptr.add_spike_train(st.thisptr)
 
-    def firing_rate(self, PyNpSpikeTrain st, double[::1] fr):
-        self.thisptr.firing_rate(st.thisptr, &fr[0])
-
     def log_likelihood(self):
         return self.thisptr.log_likelihood()
 
@@ -79,6 +90,10 @@ cdef class PyNpGlm:
 
     def coord_descent_step(self, double momentum):
         self.thisptr.coord_descent_step(momentum)
+
+    def get_firing_rate(self, PyNpSpikeTrain st):
+        cdef double[::1] fr = np.zeros(st.T)
+        self.thisptr.firing_rate(st.thisptr, &fr[0])
 
     property bias:
         def __get__(self): return self.thisptr.get_bias()
