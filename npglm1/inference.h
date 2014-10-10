@@ -26,8 +26,7 @@ public:
     std::uniform_real_distribution<double> uniform;
 
     // TODO: Template this class
-    AdaptiveHmcSampler(std::default_random_engine rng, int n_steps=10)  :
-                      n_steps(n_steps)
+    AdaptiveHmcSampler(std::default_random_engine rng, int ns=10, double ss=0.01)
     {
         // Initialize random number generators
         // This needs to be done up front. If we create them fresh
@@ -36,9 +35,9 @@ public:
         normal = std::normal_distribution<double>(0.0, 1.0);
         uniform = std::uniform_real_distribution<double>(0.0,1.0);
 
-        // TODO: Initialize with constructor
-        step_sz = 0.1;
-        n_steps = 10;
+        // Initialize with constructor
+        step_sz = ss;
+        n_steps = ns;
 
         // Adaptive step size parameters
         adaptive = true;

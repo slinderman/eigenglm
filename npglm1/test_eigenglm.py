@@ -7,7 +7,7 @@ def create_test_data():
     # Create M spike trains
     M = 1
     N = 10
-    D_imp = 1
+    D_imp = 2
     glm = pe.PyGlm(N, D_imp)
     sts = []
     for m in range(M):
@@ -18,8 +18,8 @@ def create_test_data():
         # Filter the spike train
         filtered_S = []
         for n in range(N):
-            # filtered_S.append(np.random.randn(T, D_imp).astype(np.double))
-            filtered_S.append(np.zeros((T, D_imp)).astype(np.double))
+            filtered_S.append(np.random.randn(T, D_imp).astype(np.double))
+            # filtered_S.append(np.zeros((T, D_imp)).astype(np.double))
 
         st = pe.PySpikeTrain(N, T, dt,  S, D_imp, filtered_S)
         sts.append(st)

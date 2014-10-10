@@ -90,12 +90,29 @@ class LinearImpulseCurrent : public Component
 private:
     Glm* glm;
     int N, D_imp;
+
+    // Nested class for sampling
+    class ImpulseHmcSampler : public AdaptiveHmcSampler
+    {
+    int n_pre;
+    LinearImpulseCurrent* parent;
+    public:
+        ImpulseHmcSampler(LinearImpulseCurrent* parent,
+                          std::default_random_engine rng,
+                          int n_steps=1);
+        double logp(MatrixXd x);
+        MatrixXd grad(MatrixXd x);
+        void set_n_pre(int n_pre);
+    };
+
+    ImpulseHmcSampler* sampler;
+
 public:
     // A vector of impulse response weights for each presynaptic neuron.
     vector<VectorXd> w_ir;
 
     // Constructor
-    LinearImpulseCurrent(Glm* glm, int N, int D_imp);
+    LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng);
 
     // Getters
     MatrixXd compute_current(SpikeTrain* st);
@@ -109,7 +126,7 @@ public:
 
     // Inference
     void coord_descent_step(double momentum);
-    void resample() {}
+    void resample();
 
 };
 

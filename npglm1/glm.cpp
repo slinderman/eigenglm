@@ -135,7 +135,7 @@ void BiasCurrent::resample()
 /**
  *  Impulse response classes.
  */
-LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp)
+LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng)
 {
     LinearImpulseCurrent::glm = glm;
     LinearImpulseCurrent::N = N;
@@ -146,6 +146,9 @@ LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp)
     {
         w_ir.push_back(VectorXd::Constant(D_imp, 0.0));
     }
+
+    // Initialize the sampler. The number of steps is set in glm.h
+    sampler = new ImpulseHmcSampler(this, rng);
 }
 
 VectorXd LinearImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n)
@@ -216,7 +219,67 @@ void LinearImpulseCurrent::set_w(double* w_buffer)
     }
 }
 
+/**
+ *  Impulse HMC Sampler
+ */
+LinearImpulseCurrent::ImpulseHmcSampler::ImpulseHmcSampler(LinearImpulseCurrent* parent,
+                                                           std::default_random_engine rng,
+                                                           int n_steps) :
+                                                           AdaptiveHmcSampler(rng, n_steps)
+{
+    this->parent = parent;
+}
 
+double LinearImpulseCurrent::ImpulseHmcSampler::logp(MatrixXd x)
+{
+    // Set the impulse response
+    parent->w_ir[n_pre] = x;
+
+    return parent->glm->log_probability();
+}
+
+MatrixXd LinearImpulseCurrent::ImpulseHmcSampler::grad(MatrixXd x)
+{
+    // Set the impulse response
+    parent->w_ir[n_pre] = x;
+
+    // Initialize the output
+    VectorXd grad = VectorXd::Constant(parent->D_imp, 0.0);
+
+    // Get the gradient with respect to each spike train
+    Glm* glm = parent->glm;
+    for (vector<SpikeTrain*>::iterator it = glm->spike_trains.begin();
+         it != glm->spike_trains.end();
+         ++it)
+    {
+        grad += parent->d_ll_d_w(*it, n_pre);
+    }
+
+    return grad;
+}
+
+void LinearImpulseCurrent::ImpulseHmcSampler::set_n_pre(int n_pre)
+{
+    this->n_pre = n_pre;
+}
+
+void LinearImpulseCurrent::resample()
+{
+    // Sample each presynaptic impulse response in turn.
+    for (int n_pre=0; n_pre<N; n_pre++)
+    {
+        // Tell the sampler which impulse to sample.
+        sampler->set_n_pre(n_pre);
+
+        // Use the ImpulseHmcSampler to update the bias
+        MatrixXd x_next(D_imp,1);
+
+        sampler->sample(w_ir[n_pre], &x_next);
+
+        // Set the new bias
+//        w_ir[n_pre] = x_next;
+    }
+}
 /**
  *  Nonlinearity classes.
  */
@@ -243,7 +306,7 @@ void Glm::initialize(int N, int D_imp, int seed)
 
     // Standard GLM
     Glm::bias = new BiasCurrent(this, 1.0, rng);
-    Glm::impulse = new LinearImpulseCurrent(this, N, D_imp);
+    Glm::impulse = new LinearImpulseCurrent(this, N, D_imp, rng);
     Glm::nlin = new SmoothRectLinearLink();
 
     // Make a network
