@@ -16,9 +16,9 @@ for n in range(N):
     # filtered_S.append(np.random.randn(T, D_imp).astype(np.double))
     filtered_S.append(np.zeros((T, D_imp)).astype(np.double))
 
-st = pe.PyNpSpikeTrain(N, T, dt,  S, D_imp, filtered_S)
+st = pe.PySpikeTrain(N, T, dt,  S, D_imp, filtered_S)
 
-glm = pe.PyNpGlm(N, D_imp)
+glm = pe.PyGlm(N, D_imp)
 glm.add_spike_train(st)
 
 print glm.log_likelihood()
@@ -37,7 +37,7 @@ print "Empirical rate: ", emp_rate, " spks/bin"
 N_steps = 1000
 for n in range(N_steps):
     glm.coord_descent_step(0.001)
-    rate = np.log(1. + np.exp(glm.bias))
+    rate = fr = glm.get_firing_rate(st)[0]
     ll = glm.log_likelihood()
 
     if np.mod(n, 25) == 0:

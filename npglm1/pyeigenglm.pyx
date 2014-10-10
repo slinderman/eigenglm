@@ -8,28 +8,22 @@ cimport numpy as np
 
 from libcpp.vector cimport vector
 
-cdef extern from "npglm.h":
-    cdef cppclass NpSpikeTrain:
-        NpSpikeTrain(int, int, double, double*, int, vector[double*]) except +
+cdef extern from "glm.h":
+    cdef cppclass SpikeTrain:
+        SpikeTrain(int, int, double, double*, int, vector[double*]) except +
 
-#    cdef cppclass NpBiasCurrent:
-#        NpBiasCurrent(double) except +
-#        double log_probability()
-#        void resample()
-#
-    cdef cppclass NpGlm:
-        NpGlm(int, int) except +
-        void add_spike_train(NpSpikeTrain *s)
+    cdef cppclass Glm:
+        Glm(int, int) except +
+        void add_spike_train(SpikeTrain *s)
         double log_likelihood()
         double log_probability()
         void coord_descent_step(double momentum)
 
-        void get_firing_rate(NpSpikeTrain *s, double* fr)
-        double get_bias()
+        void get_firing_rate(SpikeTrain *s, double* fr)
 
         
-cdef class PyNpSpikeTrain:
-    cdef NpSpikeTrain *thisptr      # hold a C++ instance which we're wrapping
+cdef class PySpikeTrain:
+    cdef SpikeTrain *thisptr      # hold a C++ instance which we're wrapping
     cdef int T
     cdef int N
     cdef double dt
@@ -54,35 +48,21 @@ cdef class PyNpSpikeTrain:
             temp = filtered_S[n]
             filtered_S_vect.push_back(&temp[0,0])
 
-        self.thisptr = new NpSpikeTrain( N, T, dt, &S[0], D_imp, filtered_S_vect)
+        self.thisptr = new SpikeTrain( N, T, dt, &S[0], D_imp, filtered_S_vect)
 
     def __dealloc__(self):
         del self.thisptr
 
-#cdef class PyNpBiasCurrent:
-#    cdef NpBiasCurrent *thisptr      # hold a C++ instance which we're wrapping
-#    def __cinit__(self, double bias):
-#        self.thisptr = new NpBiasCurrent(bias)
-#    def __dealloc__(self):
-#        del self.thisptr
-#
-#    def log_probability(self):
-#        return self.thisptr.log_probability()
-#
-#    def resample(self):
-#        self.thisptr.resample()
-#
-
-cdef class PyNpGlm:
-    cdef NpGlm *thisptr
+cdef class PyGlm:
+    cdef Glm *thisptr
 
     def __cinit__(self, int N, int D_imp):
-        self.thisptr = new NpGlm(N, D_imp)
+        self.thisptr = new Glm(N, D_imp)
 
     def __dealloc__(self):
         del self.thisptr
 
-    def add_spike_train(self, PyNpSpikeTrain st):
+    def add_spike_train(self, PySpikeTrain st):
         self.thisptr.add_spike_train(st.thisptr)
 
     def log_likelihood(self):
@@ -94,10 +74,7 @@ cdef class PyNpGlm:
     def coord_descent_step(self, double momentum):
         self.thisptr.coord_descent_step(momentum)
 
-    def get_firing_rate(self, PyNpSpikeTrain st):
+    def get_firing_rate(self, PySpikeTrain st):
         cdef double[::1] fr = np.zeros(st.T, dtype=np.double)
         self.thisptr.get_firing_rate(st.thisptr, &fr[0])
         return fr
-
-    property bias:
-        def __get__(self): return self.thisptr.get_bias()

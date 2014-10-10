@@ -7,7 +7,8 @@
 using namespace Eigen;
 using namespace std;
 
-SpikeTrain::SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S)
+
+void SpikeTrain::initialize(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S)
 {
     SpikeTrain::N = N;
     SpikeTrain::T = T;
@@ -18,6 +19,25 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<Ma
     SpikeTrain::filtered_S = filtered_S;
 }
 
+SpikeTrain::SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S)
+{
+    SpikeTrain::initialize(N, T, dt, S, D_imp, filtered_S);
+}
+
+SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vector<double*> filtered_S_buffers)
+{
+    NPVector<double> S(S_buffer, T);
+
+    vector<MatrixXd> filtered_S;
+    for (int n=0; n<N; n++)
+    {
+        // TODO: Get filtered_S size
+        NPMatrix<double> fS(filtered_S_buffers[n], T, D_imp);
+        filtered_S.push_back(fS);
+    }
+
+    SpikeTrain::initialize(N, T, dt, S, D_imp, filtered_S);
+}
 
 BiasCurrent::BiasCurrent(Glm* glm, double bias)
 {
@@ -113,7 +133,7 @@ void Glm::add_spike_train(SpikeTrain *s)
     spike_trains.push_back(s);
 }
 
-void Glm::firing_rate(SpikeTrain* s, VectorXd *fr)
+void Glm::get_firing_rate(SpikeTrain* s, VectorXd *fr)
 {
 //    fr.array() *= 0;
 
@@ -130,6 +150,16 @@ void Glm::firing_rate(SpikeTrain* s, VectorXd *fr)
     // Compute the firing rate and its log.
     *fr = nlin->compute_firing_rate(I);
 }
+
+void Glm::get_firing_rate(SpikeTrain* s, double* fr_buffer)
+    {
+        NPVector<double> fr(fr_buffer, s->T);
+        VectorXd vec_fr;
+        Glm::get_firing_rate(s, &vec_fr);
+
+        // Copy the result back to fr
+        fr = vec_fr;
+    }
 
 double Glm::log_likelihood()
 {
@@ -152,7 +182,7 @@ double Glm::log_likelihood()
 //        VectorXd lam = nlin->compute_firing_rate(I);
 //        VectorXd lam = VectorXd::Constant((*s)->T, 0);
         VectorXd lam;
-        Glm::firing_rate(*s, &lam);
+        Glm::get_firing_rate(*s, &lam);
         VectorXd loglam = lam.array().log();
 
         // Compute the Poisson likelihood.

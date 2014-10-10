@@ -1,12 +1,18 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <vector>
+
+#include "nptypes.h"
+
 using namespace Eigen;
 using namespace std;
-
+using namespace nptypes;
 
 class SpikeTrain
 {
+private:
+    void initialize(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S);
+
 public:
     int N;
     int T;
@@ -20,6 +26,9 @@ public:
     vector<MatrixXd> filtered_S;
 
     SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S);
+
+    // Expose a constructor that uses buffers only, for Python.
+    SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vector<double*> filtered_S_buffers);
 };
 
 class Component
@@ -109,7 +118,9 @@ public:
 
     void add_spike_train(SpikeTrain *s);
 
-    void firing_rate(SpikeTrain *s, VectorXd *fr);
+    void get_firing_rate(SpikeTrain *s, VectorXd *fr);
+
+    void get_firing_rate(SpikeTrain *s, double* fr_buffer);
 
     double log_likelihood();
 
