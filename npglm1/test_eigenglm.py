@@ -7,11 +7,11 @@ def create_test_data():
     # Create M spike trains
     M = 10
     N = 2
-    D_imp = 2
+    D_imp = 1
     glm = pe.PyGlm(N, D_imp)
     sts = []
     for m in range(M):
-        T = 1
+        T = 1000
         dt = 1.0
         S = np.random.randint(0,10,T).astype(np.double)
 
@@ -39,12 +39,14 @@ def test_w_ir_grads(glm, sts):
 
     # Get the gradient
     dll_dw = glm.get_dll_dw(sts[0], n_pre)
+    print "dll_dw ", dll_dw
+
     for m in range(1, len(sts)):
         dll_dw += glm.get_dll_dw(sts[m], n_pre)
 
     # Add a small amount of noise to w
     wf = w0.copy()
-    delta_w = 1e-6 * np.random.randn(2)
+    delta_w = 1e-6 * np.random.randn(glm.D_imp)
     wf[n_pre,:] += delta_w
     glm.set_w_ir(wf)
 
@@ -73,7 +75,7 @@ def test_coord_descent(glm, sts):
     print "Empirical rate: ", emp_rate, " spks/bin"
     N_steps = 1000
     for n in range(N_steps):
-        glm.coord_descent_step(0.01)
+        glm.coord_descent_step(0.0001)
         bias = glm.get_bias()
         # rate = glm.get_firing_rate(st)[0]
         ll = glm.log_likelihood()

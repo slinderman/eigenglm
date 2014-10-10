@@ -26,13 +26,18 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<Ma
 
 SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vector<double*> filtered_S_buffers)
 {
-    NPVector<double> S(S_buffer, T);
+    // Copy spike train into new buffer
+    NPVector<double> np_S(S_buffer, T);
+    VectorXd S(T);
+    S = np_S;
 
     vector<MatrixXd> filtered_S;
     for (int n=0; n<N; n++)
     {
-        // TODO: Get filtered_S size
-        NPMatrix<double> fS(filtered_S_buffers[n], T, D_imp);
+        // Copy filtered_S[n] into a new matrix
+        NPMatrix<double> np_fS(filtered_S_buffers[n], T, D_imp);
+        MatrixXd fS(T, D_imp);
+        fS = np_fS;
         filtered_S.push_back(fS);
     }
 
@@ -93,10 +98,7 @@ VectorXd LinearImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n)
 {
     // For the linear impulse response I_imp = filtered_S * w
     // so d_I_imp_d_w = filtered_S
-    return (glm->d_ll_d_I_imp(st, n) * st->filtered_S[n]).transpose();
-
-    // (D x T) * (T * 1) = (Dx1) vector
-//    return st->filtered_S[n].transpose() * glm->d_ll_d_I_imp(st, n).matrix() ;
+    return (glm->d_ll_d_I_imp(st, n).transpose() * st->filtered_S[n]);
 }
 
 void LinearImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer)

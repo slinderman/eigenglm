@@ -95,9 +95,9 @@ cdef class PyGlm:
         return self.thisptr.get_bias_component().get_bias()
 
     def get_w_ir(self):
-        cdef double[:,::1] w = np.zeros((self.N,self.D_imp))
+        cdef double[:,::1] w = np.zeros((self.N, self.D_imp))
         self.thisptr.get_impulse_component().get_w(&w[0,0])
-        return np.asarray(w)
+        return np.asarray(w).reshape((self.N, self.D_imp))
 
     def set_w_ir(self, double[:,::1] w):
         assert w.shape[0] == self.N and w.shape[1] == self.D_imp, "w is not the correct shape!"
