@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 
 def create_test_data():
     # Create M spike trains
-    M = 10
+    M = 6
     N = 2
     D_imp = 1
     glm = pe.PyGlm(N, D_imp)
     sts = []
     for m in range(M):
-        T = 1000
+        T = 10000
         dt = 1.0
         S = np.random.randint(0,10,T).astype(np.double)
 
