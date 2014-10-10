@@ -114,10 +114,14 @@ cdef class PyGlm:
     def log_probability(self):
         return self.thisptr.log_probability()
 
-    def coord_descent_step(self, double momentum):
-        self.thisptr.coord_descent_step(momentum)
-
     def get_firing_rate(self, PySpikeTrain st):
         cdef double[::1] fr = np.zeros(st.T, dtype=np.double)
         self.thisptr.get_firing_rate(st.thisptr, &fr[0])
         return fr
+
+    def coord_descent_step(self, double momentum):
+        self.thisptr.coord_descent_step(momentum)
+
+    def resample(self):
+        self.thisptr.resample()
+

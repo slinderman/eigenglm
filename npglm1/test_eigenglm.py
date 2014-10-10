@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 def create_test_data():
     # Create M spike trains
-    M = 6
+    M = 1
     N = 10
     D_imp = 1
     glm = pe.PyGlm(N, D_imp)
@@ -18,8 +18,8 @@ def create_test_data():
         # Filter the spike train
         filtered_S = []
         for n in range(N):
-            filtered_S.append(np.random.randn(T, D_imp).astype(np.double))
-            # filtered_S.append(np.zeros((T, D_imp)).astype(np.double))
+            # filtered_S.append(np.random.randn(T, D_imp).astype(np.double))
+            filtered_S.append(np.zeros((T, D_imp)).astype(np.double))
 
         st = pe.PySpikeTrain(N, T, dt,  S, D_imp, filtered_S)
         sts.append(st)
@@ -86,6 +86,32 @@ def test_coord_descent(glm, sts):
             # plt.plot(np.arange(T), glm.get_firing_rate(st))
             plt.pause(0.001)
 
+def test_resample(glm, sts):
+    # Plot the first data
+    plt.figure()
+    st = sts[0]
+    fr = glm.get_firing_rate(st)
+    lns = plt.plot(np.arange(st.T), fr)
+    plt.ion()
+    plt.show()
+
+    raw_input("Press any key to continue...\n")
+
+    emp_rate = np.sum(st.S)/st.T
+    print "Empirical rate: ", emp_rate, " spks/bin"
+    N_steps = 1000
+    for n in range(N_steps):
+        glm.resample()
+        bias = glm.get_bias()
+        # rate = glm.get_firing_rate(st)[0]
+        ll = glm.log_likelihood()
+
+        if np.mod(n, 25) == 0:
+            # print "Iter: ", n, "\tBias: ", bias, "\tRate: ", rate, " spks/bin\tLL:", ll
+            print "Iter: ", n, "\tBias: ", bias, " spks/bin\tLL:", ll
+            # plt.plot(np.arange(T), glm.get_firing_rate(st))
+            plt.pause(0.001)
+
 
 # Run the script
 glm, sts = create_test_data()
@@ -93,4 +119,5 @@ glm, sts = create_test_data()
 for i in range(5):
     test_w_ir_grads(glm, sts)
 
-test_coord_descent(glm, sts)
+# test_coord_descent(glm, sts)
+test_resample(glm, sts)

@@ -48,10 +48,13 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vec
 /**
  *  Bias current.
  */
-BiasCurrent::BiasCurrent(Glm* glm, double bias)
+BiasCurrent::BiasCurrent(Glm* glm, double bias, std::default_random_engine rng)
 {
     parent = glm;
     I_bias = bias;
+
+    // Initialize the sampler. The number of steps is set in glm.h
+    sampler = new BiasHmcSampler(this, rng);
 }
 
 double BiasCurrent::log_probability()
@@ -75,8 +78,59 @@ void BiasCurrent::coord_descent_step(double momentum)
     I_bias += momentum * grad;
 }
 
-void BiasCurrent::resample() {}
+/**
+ *  Bias HMC Sampler
+ */
+BiasCurrent::BiasHmcSampler::BiasHmcSampler(BiasCurrent* parent,
+                                            std::default_random_engine rng,
+                                            int n_steps) :
+                                            AdaptiveHmcSampler(rng, n_steps)
+{
+    this->parent = parent;
+}
 
+double BiasCurrent::BiasHmcSampler::logp(MatrixXd x)
+{
+    // Set the bias
+    parent->I_bias = x(0,0);
+
+    return parent->parent->log_probability();
+}
+
+MatrixXd BiasCurrent::BiasHmcSampler::grad(MatrixXd x)
+{
+    // Set the bias
+    parent->I_bias = x(0);
+
+    // Initialize the output
+    MatrixXd grad(1,1);
+    grad(0,0) = 0;
+
+    Glm* glm = parent->parent;
+
+    // Get the gradient with respect to each spike train
+    for (vector<SpikeTrain*>::iterator s = glm->spike_trains.begin();
+         s != glm->spike_trains.end();
+         ++s)
+    {
+        grad.array() += glm->d_ll_d_bias(*s);
+    }
+
+    return grad;
+}
+
+void BiasCurrent::resample()
+{
+    // Use the BiasHmcSampler to update the bias
+    MatrixXd x_curr(1,1);
+    x_curr(0,0) = I_bias;
+    MatrixXd x_next(1,1);
+
+    sampler->sample(x_curr, &x_next);
+
+    // Set the new bias
+    I_bias = x_next(0,0);
+}
 
 /**
  *  Impulse response classes.
@@ -182,10 +236,13 @@ VectorXd SmoothRectLinearLink::d_firing_rate_d_I(VectorXd I)
 /**
  *  GLM class
  */
-Glm::Glm(int N, int D_imp)
+void Glm::initialize(int N, int D_imp, int seed)
 {
+    // Initialize random number generator
+    std::default_random_engine rng(seed);
+
     // Standard GLM
-    Glm::bias = new BiasCurrent(this, 1.0);
+    Glm::bias = new BiasCurrent(this, 1.0, rng);
     Glm::impulse = new LinearImpulseCurrent(this, N, D_imp);
     Glm::nlin = new SmoothRectLinearLink();
 
@@ -193,6 +250,18 @@ Glm::Glm(int N, int D_imp)
     Glm::A = VectorXd::Ones(N);
     Glm::W = VectorXd::Ones(N);
 }
+
+Glm::Glm(int N, int D_imp, int seed)
+{
+    initialize(N, D_imp, seed);
+}
+
+Glm::Glm(int N, int D_imp)
+{
+    int seed = time(NULL);
+    initialize(N, D_imp, seed);
+}
+
 
 Glm::~Glm()
 {

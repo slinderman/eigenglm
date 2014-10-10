@@ -5,6 +5,7 @@
 #include <Eigen/Dense>
 #include <vector>
 
+#include "inference.h"
 #include "nptypes.h"
 
 using namespace Eigen;
@@ -51,15 +52,30 @@ public:
 
 // Forward define the GLM class
 class Glm;
+//class BiasCurrent;
 
 class BiasCurrent : public Component
-//class BiasCurrent
 {
     Glm* parent;
+
+    // Nested class for sampling
+    class BiasHmcSampler : public AdaptiveHmcSampler
+    {
+    BiasCurrent* parent;
+    public:
+        BiasHmcSampler(BiasCurrent* parent,
+                       std::default_random_engine rng,
+                       int n_steps=1);
+        double logp(MatrixXd x);
+        MatrixXd grad(MatrixXd x);
+    };
+
+    BiasHmcSampler* sampler;
+
 public:
     double I_bias;
 
-    BiasCurrent(Glm* glm, double bias);
+    BiasCurrent(Glm* glm, double bias, std::default_random_engine rng);
     ~BiasCurrent() {}
 
     double log_probability();
@@ -123,6 +139,8 @@ public:
 
 class Glm : public Component
 {
+private:
+    void initialize(int N, int D_imp, int seed);
 public:
     // List of datasets
     std::vector<SpikeTrain*> spike_trains;
@@ -136,6 +154,7 @@ public:
 
     // Constructor
     Glm(int N, int D_imp);
+    Glm(int N, int D_imp, int seed);
 
     ~Glm();
 

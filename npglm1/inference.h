@@ -1,3 +1,6 @@
+#ifndef __INFERENCE_H_INCLUDED__
+#define __INFERENCE_H_INCLUDED__
+
 #include <Eigen/Dense>
 #include <random>
 #include <iostream>
@@ -23,7 +26,8 @@ public:
     std::uniform_real_distribution<double> uniform;
 
     // TODO: Template this class
-    AdaptiveHmcSampler(std::default_random_engine rng)
+    AdaptiveHmcSampler(std::default_random_engine rng, int n_steps=10)  :
+                      n_steps(n_steps)
     {
         // Initialize random number generators
         // This needs to be done up front. If we create them fresh
@@ -123,4 +127,6 @@ public:
 
     }
 };
+
+#endif
 
