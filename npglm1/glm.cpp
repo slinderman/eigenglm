@@ -277,9 +277,11 @@ void LinearImpulseCurrent::resample()
         sampler->sample(w_ir[n_pre], &x_next);
 
         // Set the new bias
-//        w_ir[n_pre] = x_next;
+        w_ir[n_pre] = x_next;
     }
 }
+
+
 /**
  *  Nonlinearity classes.
  */
@@ -483,5 +485,4 @@ void Glm::resample()
     // Call subcomponent resample methods.
     bias->resample();
     impulse->resample();
-    nlin->resample();
 }

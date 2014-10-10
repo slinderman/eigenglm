@@ -1,17 +1,20 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
 import pyeigenglm as pe
 
-import matplotlib.pyplot as plt
+from datahelper import *
+from basis import create_basis, convolve_with_basis
 
 def create_test_data():
     # Create M spike trains
     M = 1
-    N = 10
-    D_imp = 2
+    N = 27
+    D_imp = 5
     glm = pe.PyGlm(N, D_imp)
     sts = []
     for m in range(M):
-        T = 10000
+        T = 60000
         dt = 1.0
         S = np.random.randint(0,10,T).astype(np.double)
 
@@ -30,6 +33,60 @@ def create_test_data():
     print glm.log_probability()
 
     return glm, sts
+
+def convert_data_to_spiketrain(datas, n_post, D_imp=5, dt_max=0.3):
+    M = len(datas)
+
+    # Initialize a basis
+    from basis import create_basis
+    basis_params = \
+    {
+        'type' : 'cosine',
+        'n_eye' : 0,
+        'n_cos' : D_imp,
+        'a': 1.0/120,
+        'b': 0.5,
+        'orth' : True,
+        'norm' : False
+    }
+    basis = create_basis(basis_params)
+
+    spiketrains = []
+    for m in range(M):
+        data = datas[m]
+        dt = data['dt']
+        S = data['S']
+        T,N = S.shape
+
+        # Interpolate basis at the resolution of the data
+        (L,_) = basis.shape
+        Lt_int = dt_max // dt
+        t_int = np.linspace(0,1, Lt_int)
+        t_bas = np.linspace(0,1,L)
+        ibasis = np.zeros((len(t_int), D_imp))
+        for b in np.arange(D_imp):
+            ibasis[:,b] = np.interp(t_int, t_bas, basis[:,b])
+
+        # Filter the spike train
+        filtered_S = []
+        for n in range(N):
+            Sn = S[:,n].reshape((-1,1))
+            fS = convolve_with_basis(Sn, ibasis)
+
+            # Flatten this manually to be safe
+            # (there's surely a way to do this with numpy)
+            (nT,Nc,Nb) = fS.shape
+            assert Nc == 1 and Nb==D_imp, \
+                "ERROR: Convolution with spike train " \
+                "resulted in incorrect shape: %s" % str(fS.shape)
+            filtered_S.append(fS[:,0,:])
+
+        Sn_post = S[:,n_post].copy(order='C')
+        st = pe.PySpikeTrain(N, T, dt,  Sn_post, D_imp, filtered_S)
+
+        spiketrains.append(st)
+
+    return spiketrains
 
 def test_w_ir_grads(glm, sts):
     # Get the initial LL and weights
@@ -64,6 +121,7 @@ def test_coord_descent(glm, sts):
     # Plot the first data
     plt.figure()
     st = sts[0]
+    T = st.S.shape[0]
     fr = glm.get_firing_rate(st)
     lns = plt.plot(np.arange(st.T), fr)
     plt.ion()
@@ -75,7 +133,7 @@ def test_coord_descent(glm, sts):
     print "Empirical rate: ", emp_rate, " spks/bin"
     N_steps = 1000
     for n in range(N_steps):
-        glm.coord_descent_step(0.0001)
+        glm.coord_descent_step(0.001)
         bias = glm.get_bias()
         # rate = glm.get_firing_rate(st)[0]
         ll = glm.log_likelihood()
@@ -83,13 +141,14 @@ def test_coord_descent(glm, sts):
         if np.mod(n, 25) == 0:
             # print "Iter: ", n, "\tBias: ", bias, "\tRate: ", rate, " spks/bin\tLL:", ll
             print "Iter: ", n, "\tBias: ", bias, " spks/bin\tLL:", ll
-            # plt.plot(np.arange(T), glm.get_firing_rate(st))
+            plt.plot(np.arange(T), glm.get_firing_rate(st))
             plt.pause(0.001)
 
 def test_resample(glm, sts):
     # Plot the first data
     plt.figure()
     st = sts[0]
+    T = st.S.shape[0]
     fr = glm.get_firing_rate(st)
     lns = plt.plot(np.arange(st.T), fr)
     plt.ion()
@@ -110,14 +169,32 @@ def test_resample(glm, sts):
             # print "Iter: ", n, "\tBias: ", bias, "\tRate: ", rate, " spks/bin\tLL:", ll
             print "Iter: ", n, "\tBias: ", bias, " spks/bin\tLL:", ll
             # plt.plot(np.arange(T), glm.get_firing_rate(st))
+            lns[0].set_data(np.arange(T), glm.get_firing_rate(st))
+            plt.ylim(0,15)
             plt.pause(0.001)
 
-
 # Run the script
-glm, sts = create_test_data()
+datafile = '../data/2014_10_10-16_16/data.pkl'
+with open(datafile) as f:
+    data = cPickle.load(f)
+    N = data['N']
+    n_post = 0
+    D_imp = 5
+    glm = pe.PyGlm(N, D_imp)
+
+    sts = convert_data_to_spiketrain([data], n_post, D_imp=D_imp)
+    for st in sts:
+        glm.add_spike_train(st)
+
+    print glm.log_likelihood()
+    print glm.log_probability()
+
+# glm, sts = create_test_data()
 
 for i in range(5):
     test_w_ir_grads(glm, sts)
 
-# test_coord_descent(glm, sts)
-test_resample(glm, sts)
+test_coord_descent(glm, sts)
+# test_resample(glm, sts)
+
+
