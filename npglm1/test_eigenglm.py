@@ -22,7 +22,6 @@ def create_test_data():
         filtered_S = []
         for n in range(N):
             filtered_S.append(np.random.randn(T, D_imp).astype(np.double))
-            # filtered_S.append(np.zeros((T, D_imp)).astype(np.double))
 
         st = pe.PySpikeTrain(N, T, dt,  S, D_imp, filtered_S)
         sts.append(st)

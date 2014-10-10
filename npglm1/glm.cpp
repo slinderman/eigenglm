@@ -51,10 +51,23 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vec
 BiasCurrent::BiasCurrent(Glm* glm, double bias, std::default_random_engine rng)
 {
     parent = glm;
-    I_bias = bias;
+
+    // Create a Gaussian prior
+    VectorXd mu(1);
+    mu(0) = 1.0;
+    VectorXd sigma(1);
+    sigma(0) = 0.5;
+
+    prior = new DiagonalGuassian(mu, sigma, rng);
+    I_bias = prior->sample()(0);
 
     // Initialize the sampler. The number of steps is set in glm.h
     sampler = new BiasHmcSampler(this, rng);
+}
+
+BiasCurrent::~BiasCurrent()
+{
+    delete prior;
 }
 
 double BiasCurrent::log_probability()
@@ -64,7 +77,12 @@ double BiasCurrent::log_probability()
 
 void BiasCurrent::coord_descent_step(double momentum)
 {
-    double grad = 0;
+    double grad;
+
+    Map<MatrixXf> mI_bias(&I_bias, 1,1);
+    // Overwrite grad with the prior gradient
+    prior->grad(mI_bias,
+                &Map<MatrixXf> mf(&grad, 1,1));
 
     // Get the gradient with respect to each spike train
     for (vector<SpikeTrain*>::iterator s = parent->spike_trains.begin();
@@ -103,8 +121,11 @@ MatrixXd BiasCurrent::BiasHmcSampler::grad(MatrixXd x)
     parent->I_bias = x(0);
 
     // Initialize the output
-    MatrixXd grad(1,1);
-    grad(0,0) = 0;
+    Map<MatrixXf> mI_bias(&I_bias, 1,1);
+    MatrixXd grad = MatrixXd::Zero(1,1);
+
+    // Overwrite grad with the prior gradient
+    prior->grad(mI_bias, &grad);
 
     Glm* glm = parent->parent;
 
@@ -372,16 +393,17 @@ void Glm::get_firing_rate(SpikeTrain* s, double* fr_buffer)
 double Glm::log_likelihood()
 {
     double ll = 0;
-    for (vector<SpikeTrain*>::iterator s = spike_trains.begin();
-         s != spike_trains.end();
-         ++s)
+    for (vector<SpikeTrain*>::iterator it = spike_trains.begin();
+         it != spike_trains.end();
+         ++it)
     {
+        SpikeTrain* s = *it;
         VectorXd lam;
-        Glm::get_firing_rate(*s, &lam);
+        Glm::get_firing_rate(s, &lam);
         VectorXd loglam = lam.array().log();
 
         // Compute the Poisson likelihood.
-        ll += -1 * (*s)->dt * lam.sum() + (*s)->S.dot(loglam);
+        ll += -1 * s->dt * lam.sum() + s->S.dot(loglam);
 
     }
     return ll;

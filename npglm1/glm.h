@@ -5,6 +5,7 @@
 #include <Eigen/Dense>
 #include <vector>
 
+#include "distributions.h"
 #include "inference.h"
 #include "nptypes.h"
 
@@ -56,6 +57,7 @@ class Glm;
 
 class BiasCurrent : public Component
 {
+    Distribution* prior;
     Glm* parent;
 
     // Nested class for sampling
@@ -76,7 +78,7 @@ public:
     double I_bias;
 
     BiasCurrent(Glm* glm, double bias, std::default_random_engine rng);
-    ~BiasCurrent() {}
+    ~BiasCurrent();
 
     double log_probability();
     void coord_descent_step(double momentum);
