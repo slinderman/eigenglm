@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 def create_test_data():
     # Create M spike trains
     M = 6
-    N = 2
+    N = 10
     D_imp = 1
     glm = pe.PyGlm(N, D_imp)
     sts = []
