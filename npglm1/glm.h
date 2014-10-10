@@ -1,3 +1,6 @@
+#ifndef __GLM_H_INCLUDED__
+#define __GLM_H_INCLUDED__
+
 #include <iostream>
 #include <Eigen/Dense>
 #include <vector>
@@ -11,6 +14,7 @@ using namespace nptypes;
 class SpikeTrain
 {
 private:
+    // Does the shared work of the constructors.
     void initialize(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S);
 
 public:
@@ -61,20 +65,36 @@ public:
     double log_probability();
     void coord_descent_step(double momentum);
     void resample();
+
+    double get_bias() { return I_bias; }
 };
 
 class LinearImpulseCurrent : public Component
 {
+private:
+    Glm* glm;
+    int N, D_imp;
 public:
     // A vector of impulse response weights for each presynaptic neuron.
     vector<VectorXd> w_ir;
 
-    LinearImpulseCurrent(int N, int B);
+    // Constructor
+    LinearImpulseCurrent(Glm* glm, int N, int D_imp);
 
+    // Getters
     MatrixXd compute_current(SpikeTrain* st);
-
+    void get_w(double* w_buffer);
+    void set_w(double* w_buffer);
     double log_probability() {return 0.0; }
+
+    // Gradients
+    VectorXd d_ll_d_w(SpikeTrain* st, int n);
+    void d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer);
+
+    // Inference
+    void coord_descent_step(double momentum);
     void resample() {}
+
 };
 
 //class StimulusCurrent : public Component
@@ -114,9 +134,17 @@ public:
     VectorXd A;
     VectorXd W;
 
+    // Constructor
     Glm(int N, int D_imp);
 
+    ~Glm();
+
     void add_spike_train(SpikeTrain *s);
+
+    // Getters
+    BiasCurrent* get_bias_component() { return bias; }
+
+    LinearImpulseCurrent* get_impulse_component() { return impulse; }
 
     void get_firing_rate(SpikeTrain *s, VectorXd *fr);
 
@@ -126,6 +154,7 @@ public:
 
     double log_probability();
 
+    // Gradient calculations
     double d_ll_d_bias(SpikeTrain* s);
 
     double d_ll_d_bias(SpikeTrain* s, VectorXd I_stim, VectorXd I_net);
@@ -134,18 +163,12 @@ public:
 
     VectorXd d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim);
 
+    // Coordinate descent inference
     void coord_descent_step(double momentum);
 
+    // MCMC
     void resample();
 };
 
-class Population : Component
-{
-public:
-    vector<Glm*> glms;
 
-    void add_glm(Glm *g);
-
-    double log_probability();
-    void resample();
-};
+#endif

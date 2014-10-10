@@ -39,6 +39,10 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vec
     SpikeTrain::initialize(N, T, dt, S, D_imp, filtered_S);
 }
 
+
+/**
+ *  Bias current.
+ */
 BiasCurrent::BiasCurrent(Glm* glm, double bias)
 {
     parent = glm;
@@ -68,12 +72,57 @@ void BiasCurrent::coord_descent_step(double momentum)
 
 void BiasCurrent::resample() {}
 
-LinearImpulseCurrent::LinearImpulseCurrent(int N, int B)
+
+/**
+ *  Impulse response classes.
+ */
+LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp)
 {
+    LinearImpulseCurrent::glm = glm;
+    LinearImpulseCurrent::N = N;
+    LinearImpulseCurrent::D_imp = D_imp;
+
     // Initialize impulse response weights.
     for (int n=0; n < N; n++)
     {
-        w_ir.push_back(VectorXd::Random(B));
+        w_ir.push_back(VectorXd::Constant(D_imp, 0.0));
+    }
+}
+
+VectorXd LinearImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n)
+{
+    // For the linear impulse response I_imp = filtered_S * w
+    // so d_I_imp_d_w = filtered_S
+    return (glm->d_ll_d_I_imp(st, n) * st->filtered_S[n]).transpose();
+
+    // (D x T) * (T * 1) = (Dx1) vector
+//    return st->filtered_S[n].transpose() * glm->d_ll_d_I_imp(st, n).matrix() ;
+}
+
+void LinearImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer)
+{
+    // Copy the impulse response weights into a buffer
+    NPVector<double> dw(dw_buffer, LinearImpulseCurrent::D_imp);
+    dw = LinearImpulseCurrent::d_ll_d_w(st, n);
+}
+
+void LinearImpulseCurrent::coord_descent_step(double momentum)
+{
+    // Update each of the impulse response weights
+    for (int n=0; n<N; n++)
+    {
+        VectorXd grad = VectorXd::Constant(D_imp, 0.0);
+
+        // Get the gradient with respect to each spike train
+        for (vector<SpikeTrain*>::iterator it = glm->spike_trains.begin();
+             it != glm->spike_trains.end();
+             ++it)
+        {
+            grad += LinearImpulseCurrent::d_ll_d_w(*it, n);
+        }
+
+        // Update w_ir
+        w_ir[n] += (momentum * grad.array()).matrix();
     }
 }
 
@@ -91,19 +140,30 @@ MatrixXd LinearImpulseCurrent::compute_current(SpikeTrain* st)
     return I_imp;
 }
 
-//class StimulusCurrent : public Component
-//{
-//public:
-//
-//    double log_probability();
-//
-//    void resample();
-//};
-//
-//class NoStimulusCurrent : StimulusCurrent
-//{
-//}
+void LinearImpulseCurrent::get_w(double* w_buffer)
+{
+    // Copy the impulse response weights into a buffer
+    NPMatrix<double> w(w_buffer, LinearImpulseCurrent::N, LinearImpulseCurrent::D_imp);
+    for (int n=0; n<LinearImpulseCurrent::N; n++)
+    {
+        w.row(n) = w_ir[n];
+    }
+}
 
+void LinearImpulseCurrent::set_w(double* w_buffer)
+{
+    // Copy the impulse response weights into a buffer
+    NPMatrix<double> w(w_buffer, LinearImpulseCurrent::N, LinearImpulseCurrent::D_imp);
+    for (int n=0; n<LinearImpulseCurrent::N; n++)
+    {
+        w_ir[n] = w.row(n);
+    }
+}
+
+
+/**
+ *  Nonlinearity classes.
+ */
 
 VectorXd SmoothRectLinearLink::compute_firing_rate(VectorXd I)
 {
@@ -116,16 +176,28 @@ VectorXd SmoothRectLinearLink::d_firing_rate_d_I(VectorXd I)
     return I.array().exp() / (1.0 + I.array().exp());
 }
 
+
+/**
+ *  GLM class
+ */
 Glm::Glm(int N, int D_imp)
 {
     // Standard GLM
     Glm::bias = new BiasCurrent(this, 1.0);
-    Glm::impulse = new LinearImpulseCurrent(N, D_imp);
+    Glm::impulse = new LinearImpulseCurrent(this, N, D_imp);
     Glm::nlin = new SmoothRectLinearLink();
 
     // Make a network
     Glm::A = VectorXd::Ones(N);
     Glm::W = VectorXd::Ones(N);
+}
+
+Glm::~Glm()
+{
+    // Cleanup
+    if (Glm::bias) { delete Glm::bias; }
+    if (Glm::impulse) { delete Glm::impulse; }
+    if (Glm::nlin) { delete Glm::nlin; }
 }
 
 void Glm::add_spike_train(SpikeTrain *s)
@@ -152,14 +224,14 @@ void Glm::get_firing_rate(SpikeTrain* s, VectorXd *fr)
 }
 
 void Glm::get_firing_rate(SpikeTrain* s, double* fr_buffer)
-    {
-        NPVector<double> fr(fr_buffer, s->T);
-        VectorXd vec_fr;
-        Glm::get_firing_rate(s, &vec_fr);
+{
+    NPVector<double> fr(fr_buffer, s->T);
+    VectorXd vec_fr;
+    Glm::get_firing_rate(s, &vec_fr);
 
-        // Copy the result back to fr
-        fr = vec_fr;
-    }
+    // Copy the result back to fr
+    fr = vec_fr;
+}
 
 double Glm::log_likelihood()
 {
@@ -168,19 +240,6 @@ double Glm::log_likelihood()
          s != spike_trains.end();
          ++s)
     {
-//        // Compute the total current for this spike train.
-//        VectorXd I = VectorXd::Constant((*s)->T, 0.0);
-//
-//        // Bias is a constant.
-//        I = I.array() + bias->I_bias;
-//
-//        // Add the weighted impulse responses
-//        MatrixXd I_imp = impulse->compute_current(*s);
-//        I += I_imp * (A.array() * W.array()).matrix();
-//
-//        // Compute the firing rate and its log.
-//        VectorXd lam = nlin->compute_firing_rate(I);
-//        VectorXd lam = VectorXd::Constant((*s)->T, 0);
         VectorXd lam;
         Glm::get_firing_rate(*s, &lam);
         VectorXd loglam = lam.array().log();
@@ -205,22 +264,6 @@ double Glm::log_probability()
     lp += log_likelihood();
 
     return lp;
-}
-
-void Glm::coord_descent_step(double momentum)
-{
-    // Call subcomponent resample methods.
-    bias->coord_descent_step(momentum);
-//    impulse->coord_descent_step();
-//    nlin->coord_descent_step();
-}
-
-void Glm::resample()
-{
-    // Call subcomponent resample methods.
-    bias->resample();
-    impulse->resample();
-    nlin->resample();
 }
 
 double Glm::d_ll_d_bias(SpikeTrain* s)
@@ -270,10 +313,12 @@ VectorXd Glm::d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim)
 {
     // Compute the gradient of the log likelihood with respect to the
     // First, compute the total current for this spike train.
-    VectorXd I = VectorXd(I_bias + I_stim.array());
+    VectorXd I = I_bias + I_stim.array();
 
-    // Bias is a constant.
-    I = I.array() + bias->I_bias;
+    // Add in the impulse current
+    MatrixXd I_imp = impulse->compute_current(s);
+    VectorXd I_net = I_imp * (A.array() * W.array()).matrix();
+    I += I_net;
 
     // Compute the firing rate and its log.
     VectorXd lam = nlin->compute_firing_rate(I);
@@ -291,88 +336,18 @@ VectorXd Glm::d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim)
     return d_ll_d_I_imp_n;
 }
 
-
-void Population::add_glm(Glm *g)
+void Glm::coord_descent_step(double momentum)
 {
-    glms.push_back(g);
+    // Call subcomponent resample methods.
+    bias->coord_descent_step(momentum);
+    impulse->coord_descent_step(momentum);
+
 }
 
-double Population::log_probability()
+void Glm::resample()
 {
-    double lp = 0.0;
-    for (vector<Glm*>::iterator g = glms.begin();
-         g != glms.end();
-         ++g)
-    {
-        lp += (*g)->log_probability();
-    }
-    return lp;
+    // Call subcomponent resample methods.
+    bias->resample();
+    impulse->resample();
+    nlin->resample();
 }
-
-void Population::resample()
-{
-}
-
-
-
-int main()
-{
-    // Make some fake data sets.
-    vector<SpikeTrain*> spike_trains;
-    int N = 2;
-    int B = 5;
-    for (int m=0; m < 10; m++)
-    {
-        int T = 10;
-        double dt = 0.1;
-        VectorXd S = (1 + VectorXd::Random(T).array()) * 10;
-
-        vector<MatrixXd> filtered_S;
-        for (int n=0; n<N; n++)
-        {
-            filtered_S.push_back(MatrixXd::Random(T,B));
-        }
-
-        SpikeTrain *s = new SpikeTrain(N, T, dt, S, B, filtered_S);
-        spike_trains.push_back(s);
-    }
-
-    // Make a network
-    MatrixXd A = MatrixXd::Constant(N,N,1);
-    MatrixXd W = MatrixXd::Constant(N,N,1);
-
-    // Make a population of GLMs
-    Population population = Population();
-
-    for (int n=0; n<N; n++)
-    {
-        Glm *g = new Glm(N, B);
-
-        // Add data
-        for (vector<SpikeTrain*>::iterator s = spike_trains.begin();
-                 s != spike_trains.end();
-                 ++s)
-        {
-            g->add_spike_train(*s);
-        }
-
-        // Add GLM to population.
-        population.add_glm(g);
-    }
-
-
-
-    // Compute log likelihood
-//    cout << "ll = " << g->log_likelihood() << endl;
-    cout << "lp = " << population.log_probability() << endl;
-
-//    cout << "dll_dbias = " << population.glms[0]->d_ll_d_bias(spike_trains[0]) << endl;
-//    cout << "dll_dI_imp = " << population.glms[0]->d_ll_d_I_imp(spike_trains[0], 0) << endl;
-
-    // Cleanup?
-//    delete spike_trains;
-//    delete bias;
-//    delete link;
-//    delete g;
-}
-

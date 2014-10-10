@@ -8,28 +8,49 @@ cimport numpy as np
 
 from libcpp.vector cimport vector
 
+# Import C++ classes from glm.h
 cdef extern from "glm.h":
+    # Spike train class encapsulates the observed datasets
     cdef cppclass SpikeTrain:
         SpikeTrain(int, int, double, double*, int, vector[double*]) except +
 
+    # Bias class for the constant activation bias
+    cdef cppclass BiasCurrent:
+        double get_bias()
+
+    # Linear impulse response class
+    cdef cppclass LinearImpulseCurrent:
+        void d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer)
+        void get_w(double* w_buffer)
+        void set_w(double* w_buffer)
+
+    # Main GLM class
     cdef cppclass Glm:
         Glm(int, int) except +
         void add_spike_train(SpikeTrain *s)
+
+        # Getters
+        BiasCurrent* get_bias_component()
+        LinearImpulseCurrent* get_impulse_component()
         double log_likelihood()
         double log_probability()
-        void coord_descent_step(double momentum)
-
         void get_firing_rate(SpikeTrain *s, double* fr)
 
-        
+        # Inference
+        void coord_descent_step(double momentum)
+        void resample()
+
+# Expose the SpikeTrain class to Python
 cdef class PySpikeTrain:
-    cdef SpikeTrain *thisptr      # hold a C++ instance which we're wrapping
-    cdef int T
-    cdef int N
-    cdef double dt
-    cdef double[::1] S
-    cdef int D_imp
-    cdef list filtered_S
+    cdef SpikeTrain *thisptr
+
+    # Also save the parameters for easy access from Python
+    cdef public int T
+    cdef public int N
+    cdef public double dt
+    cdef public double[::1] S
+    cdef public int D_imp
+    cdef public list filtered_S
 
     def __cinit__(self, int N, int T, double dt, double[::1] S, int D_imp, list filtered_S):
         # Store the values locally
@@ -53,17 +74,39 @@ cdef class PySpikeTrain:
     def __dealloc__(self):
         del self.thisptr
 
+# Expose the GLM class to Python
 cdef class PyGlm:
     cdef Glm *thisptr
+    cdef public int N
+    cdef public int D_imp
 
     def __cinit__(self, int N, int D_imp):
         self.thisptr = new Glm(N, D_imp)
+        self.N = N
+        self.D_imp = D_imp
 
     def __dealloc__(self):
         del self.thisptr
 
     def add_spike_train(self, PySpikeTrain st):
         self.thisptr.add_spike_train(st.thisptr)
+
+    def get_bias(self):
+        return self.thisptr.get_bias_component().get_bias()
+
+    def get_w_ir(self):
+        cdef double[:,::1] w = np.zeros((self.N,self.D_imp))
+        self.thisptr.get_impulse_component().get_w(&w[0,0])
+        return np.asarray(w)
+
+    def set_w_ir(self, double[:,::1] w):
+        assert w.shape[0] == self.N and w.shape[1] == self.D_imp, "w is not the correct shape!"
+        self.thisptr.get_impulse_component().set_w(&w[0,0])
+
+    def get_dll_dw(self, PySpikeTrain st, int n):
+        cdef double[::1] dw = np.zeros(self.D_imp)
+        self.thisptr.get_impulse_component().d_ll_d_w(st.thisptr, n, &dw[0])
+        return np.asarray(dw)
 
     def log_likelihood(self):
         return self.thisptr.log_likelihood()
