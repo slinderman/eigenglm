@@ -9,7 +9,7 @@ from basis import create_basis, convolve_with_basis
 def create_test_data():
     # Create M spike trains
     M = 1
-    N = 27
+    N = 2
     D_imp = 5
     glm = pe.PyGlm(N, D_imp)
     sts = []
@@ -132,7 +132,7 @@ def test_coord_descent(glm, sts):
     print "Empirical rate: ", emp_rate, " spks/bin"
     N_steps = 1000
     for n in range(N_steps):
-        glm.coord_descent_step(0.001)
+        glm.coord_descent_step(0.0001)
         bias = glm.get_bias()
         # rate = glm.get_firing_rate(st)[0]
         ll = glm.log_likelihood()
@@ -173,22 +173,22 @@ def test_resample(glm, sts):
             plt.pause(0.001)
 
 # Run the script
-datafile = '../data/2014_10_10-16_16/data.pkl'
-with open(datafile) as f:
-    data = cPickle.load(f)
-    N = data['N']
-    n_post = 0
-    D_imp = 5
-    glm = pe.PyGlm(N, D_imp)
+# datafile = '../data/2014_10_10-16_16/data.pkl'
+# with open(datafile) as f:
+#     data = cPickle.load(f)
+#     N = data['N']
+#     n_post = 0
+#     D_imp = 5
+#     glm = pe.PyGlm(N, D_imp)
+#
+#     sts = convert_data_to_spiketrain([data], n_post, D_imp=D_imp)
+#     for st in sts:
+#         glm.add_spike_train(st)
+#
+#     print glm.log_likelihood()
+#     print glm.log_probability()
 
-    sts = convert_data_to_spiketrain([data], n_post, D_imp=D_imp)
-    for st in sts:
-        glm.add_spike_train(st)
-
-    print glm.log_likelihood()
-    print glm.log_probability()
-
-# glm, sts = create_test_data()
+glm, sts = create_test_data()
 
 for i in range(5):
     test_w_ir_grads(glm, sts)

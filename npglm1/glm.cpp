@@ -77,12 +77,12 @@ double BiasCurrent::log_probability()
 
 void BiasCurrent::coord_descent_step(double momentum)
 {
-    double grad;
-
-    Map<MatrixXf> mI_bias(&I_bias, 1,1);
+    MatrixXd mI_bias = MatrixXd::Constant(1, 1, I_bias);
+    MatrixXd mgrad = MatrixXd::Zero(1,1);
     // Overwrite grad with the prior gradient
-    prior->grad(mI_bias,
-                &Map<MatrixXf> mf(&grad, 1,1));
+    prior->grad(mI_bias, &mgrad);
+
+    double grad = mgrad(0);
 
     // Get the gradient with respect to each spike train
     for (vector<SpikeTrain*>::iterator s = parent->spike_trains.begin();
@@ -121,11 +121,12 @@ MatrixXd BiasCurrent::BiasHmcSampler::grad(MatrixXd x)
     parent->I_bias = x(0);
 
     // Initialize the output
-    Map<MatrixXf> mI_bias(&I_bias, 1,1);
+    MatrixXd mI_bias = MatrixXd::Constant(1, 1, parent->I_bias);
+//    Map<MatrixXd> mI_bias(&I_bias, 1,1);
     MatrixXd grad = MatrixXd::Zero(1,1);
 
     // Overwrite grad with the prior gradient
-    prior->grad(mI_bias, &grad);
+    parent->prior->grad(mI_bias, &grad);
 
     Glm* glm = parent->parent;
 
