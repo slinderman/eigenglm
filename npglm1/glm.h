@@ -90,6 +90,7 @@ public:
 class LinearImpulseCurrent : public Component
 {
 private:
+    Distribution* prior;
     Glm* glm;
     int N, D_imp;
 

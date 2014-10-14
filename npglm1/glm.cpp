@@ -56,7 +56,7 @@ BiasCurrent::BiasCurrent(Glm* glm, double bias, std::default_random_engine rng)
     VectorXd mu(1);
     mu(0) = 1.0;
     VectorXd sigma(1);
-    sigma(0) = 0.5;
+    sigma(0) = 1.0;
 
     prior = new DiagonalGuassian(mu, sigma, rng);
     I_bias = prior->sample()(0);
@@ -79,6 +79,7 @@ void BiasCurrent::coord_descent_step(double momentum)
 {
     MatrixXd mI_bias = MatrixXd::Constant(1, 1, I_bias);
     MatrixXd mgrad = MatrixXd::Zero(1,1);
+
     // Overwrite grad with the prior gradient
     prior->grad(mI_bias, &mgrad);
 
@@ -163,10 +164,17 @@ LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::defa
     LinearImpulseCurrent::N = N;
     LinearImpulseCurrent::D_imp = D_imp;
 
+    // TODO: Create a Gaussian prior
+    VectorXd mu = VectorXd::Constant(D_imp, 0);
+    VectorXd sigma = VectorXd::Constant(D_imp, 1);
+
+    prior = new DiagonalGuassian(mu, sigma, rng);
+
     // Initialize impulse response weights.
     for (int n=0; n < N; n++)
     {
-        w_ir.push_back(VectorXd::Constant(D_imp, 0.0));
+//        w_ir.push_back(VectorXd::Constant(D_imp, 0.0));
+        w_ir.push_back(prior->sample());
     }
 
     // Initialize the sampler. The number of steps is set in glm.h
@@ -192,7 +200,10 @@ void LinearImpulseCurrent::coord_descent_step(double momentum)
     // Update each of the impulse response weights
     for (int n=0; n<N; n++)
     {
-        VectorXd grad = VectorXd::Constant(D_imp, 0.0);
+//        VectorXd grad = VectorXd::Constant(D_imp, 0.0);
+        MatrixXd grad(D_imp,1);
+        prior->grad(w_ir[n], &grad);
+
 
         // Get the gradient with respect to each spike train
         for (vector<SpikeTrain*>::iterator it = glm->spike_trains.begin();
@@ -266,7 +277,9 @@ MatrixXd LinearImpulseCurrent::ImpulseHmcSampler::grad(MatrixXd x)
     parent->w_ir[n_pre] = x;
 
     // Initialize the output
-    VectorXd grad = VectorXd::Constant(parent->D_imp, 0.0);
+//    VectorXd grad = VectorXd::Constant(parent->D_imp, 0.0);
+    MatrixXd grad(parent->D_imp, 1);
+    parent->prior->grad(x, &grad);
 
     // Get the gradient with respect to each spike train
     Glm* glm = parent->glm;
