@@ -176,34 +176,6 @@ VectorXd SmoothRectLinearLink::d_firing_rate_d_I(VectorXd I)
 /**
  *  GLM class
  */
-void Glm::initialize(int N, int D_imp, int seed)
-{
-    // Initialize random number generator
-    std::default_random_engine rng(seed);
-
-    // Standard GLM
-    Glm::bias = new BiasCurrent(this, 1.0, rng);
-    //Glm::impulse = new LinearImpulseCurrent(this, N, D_imp, rng);
-    Glm::impulse = new DirichletImpulseCurrent(this, N, D_imp, rng);
-    Glm::nlin = new SmoothRectLinearLink();
-
-    // Make a network
-    Glm::A = VectorXd::Ones(N);
-    Glm::W = VectorXd::Ones(N);
-}
-
-Glm::Glm(int N, int D_imp, int seed)
-{
-    initialize(N, D_imp, seed);
-}
-
-Glm::Glm(int N, int D_imp)
-{
-    int seed = time(NULL);
-    initialize(N, D_imp, seed);
-}
-
-
 Glm::~Glm()
 {
     // Cleanup
@@ -363,3 +335,63 @@ void Glm::resample()
     bias->resample();
     impulse->resample();
 }
+
+/**
+ *  Standard GLM implementation
+ */
+void StandardGlm::initialize(int N, int D_imp, int seed)
+{
+    // Initialize random number generator
+    std::default_random_engine rng(seed);
+
+    // Standard GLM
+    Glm::bias = new BiasCurrent(this, 1.0, rng);
+    Glm::impulse = new LinearImpulseCurrent(this, N, D_imp, rng);
+    Glm::nlin = new SmoothRectLinearLink();
+
+    // Make a network
+    Glm::A = VectorXd::Ones(N);
+    Glm::W = VectorXd::Ones(N);
+}
+
+StandardGlm::StandardGlm(int N, int D_imp, int seed)
+{
+    initialize(N, D_imp, seed);
+}
+
+StandardGlm::StandardGlm(int N, int D_imp)
+{
+    int seed = time(NULL);
+    initialize(N, D_imp, seed);
+}
+
+/**
+ *  Normalized GLM implementation
+ */
+void NormalizedGlm::initialize(int N, int D_imp, int seed)
+{
+    // Initialize random number generator
+    std::default_random_engine rng(seed);
+
+    // Normalized GLM
+    Glm::bias = new BiasCurrent(this, 1.0, rng);
+    Glm::impulse = new DirichletImpulseCurrent(this, N, D_imp, rng);
+    Glm::nlin = new SmoothRectLinearLink();
+
+    // Make a network
+    Glm::A = VectorXd::Ones(N);
+    Glm::W = VectorXd::Ones(N);
+}
+
+NormalizedGlm::NormalizedGlm(int N, int D_imp, int seed)
+{
+    initialize(N, D_imp, seed);
+}
+
+NormalizedGlm::NormalizedGlm(int N, int D_imp)
+{
+    int seed = time(NULL);
+    initialize(N, D_imp, seed);
+}
+
+

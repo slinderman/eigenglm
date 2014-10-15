@@ -141,20 +141,19 @@ public:
         return p;
     }
 
-    MatrixXd grad_dirichlet(MatrixXd x)
+    VectorXd grad_dirichlet(VectorXd x)
     {
         // w_d = |g_d| / \sum_{d'} |g_d'|
         // d_wd/d_gd = sign(g_d) * sum_{d'\neq d} |g_d'|
-        MatrixXd g(x.rows(), x.cols());
+        // MatrixXd g(x.rows(), x.cols());
+        VectorXd g(D);
         double Z = x.array().abs().sum();
 
-        for (int i=0; i<x.rows(); i++)
+        for (int d=0; d<D; d++)
         {
-            for (int j=0; j<x.cols(); j++)
-            {
-                int sign = -1 + 2 * (x(i,j) > 0);
-                g(i,j) = sign * (Z - fabs(x(i,j)));
-            }
+            int sign = x(d) < 0 ? -1 : 1;
+//            int sign = -1 + 2 * (x(d) > 0);
+            g(d) = sign * (Z - fabs(x(d))) / (Z*Z);
         }
         return g;
     }

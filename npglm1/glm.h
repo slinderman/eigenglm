@@ -44,6 +44,9 @@ public:
     //
     virtual double log_probability() = 0;
 
+    // Coordinate descent inference.
+    virtual void coord_descent_step(double momentum) = 0;
+
     // Resample the parameters of this component
     virtual void resample() = 0;
 
@@ -87,7 +90,13 @@ public:
     double get_bias() { return I_bias; }
 };
 
-class LinearImpulseCurrent : public Component
+class ImpulseCurrent : public Component
+{
+public:
+    virtual MatrixXd compute_current(SpikeTrain* st) = 0;
+};
+
+class LinearImpulseCurrent : public ImpulseCurrent
 {
 private:
     Distribution* prior;
@@ -133,7 +142,7 @@ public:
 
 };
 
-class DirichletImpulseCurrent
+class DirichletImpulseCurrent : public ImpulseCurrent
 {
 private:
     // Dirichlet parameters (real valued, unconstrained)
@@ -168,18 +177,18 @@ public:
     // Getters
     MatrixXd compute_current(SpikeTrain* st);
     void get_w(double* w_buffer);
-    void set_w(double* w_buffer);
+    void get_g(double* w_buffer);
+    void set_g(double* w_buffer);
     double log_probability() {return 0.0; }
 
     // Gradients
-    VectorXd d_ll_d_w(SpikeTrain* st, int n);
-    void d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer);
+    VectorXd d_ll_d_g(SpikeTrain* st, int n);
+    void d_ll_d_g(SpikeTrain* st, int n, double* dg_buffer);
 
     // Inference
     void coord_descent_step(double momentum);
     void resample();
 };
-
 
 //class StimulusCurrent : public Component
 //{
@@ -203,60 +212,74 @@ public:
 
     double log_probability() {return 0.0; }
     void resample() {}
+    void coord_descent_step(double momentum) {}
 };
 
 class Glm : public Component
 {
-private:
-    void initialize(int N, int D_imp, int seed);
-public:
-    // List of datasets
-    std::vector<SpikeTrain*> spike_trains;
-
+protected:
     // Subcomponents
     BiasCurrent *bias;
-    //LinearImpulseCurrent *impulse;
-    DirichletImpulseCurrent *impulse;
+    ImpulseCurrent *impulse;
     SmoothRectLinearLink *nlin;
     VectorXd A;
     VectorXd W;
 
-    // Constructor
-    Glm(int N, int D_imp);
-    Glm(int N, int D_imp, int seed);
+public:
+    // List of datasets
+    std::vector<SpikeTrain*> spike_trains;
 
+    // This is an abstract base class
     ~Glm();
 
     void add_spike_train(SpikeTrain *s);
 
-    // Getters
-    BiasCurrent* get_bias_component() { return bias; }
-
-    //LinearImpulseCurrent* get_impulse_component() { return impulse; }
-    DirichletImpulseCurrent* get_impulse_component() { return impulse; }
-
     void get_firing_rate(SpikeTrain *s, VectorXd *fr);
-
     void get_firing_rate(SpikeTrain *s, double* fr_buffer);
-
     double log_likelihood();
-
     double log_probability();
 
     // Gradient calculations
     double d_ll_d_bias(SpikeTrain* s);
-
     double d_ll_d_bias(SpikeTrain* s, VectorXd I_stim, VectorXd I_net);
-
     VectorXd d_ll_d_I_imp(SpikeTrain* s, int n);
-
     VectorXd d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim);
 
-    // Coordinate descent inference
+    // Inference
     void coord_descent_step(double momentum);
-
-    // MCMC
     void resample();
+};
+
+class StandardGlm : public Glm
+{
+private:
+    void initialize(int N, int D_imp, int seed);
+
+public:
+    // Constructor
+    StandardGlm(int N, int D_imp);
+    StandardGlm(int N, int D_imp, int seed);
+    ~StandardGlm() {}
+
+    // Getters
+    BiasCurrent* get_bias_component() { return bias; }
+    LinearImpulseCurrent* get_impulse_component() { return static_cast<LinearImpulseCurrent*>(impulse); }
+};
+
+class NormalizedGlm : public Glm
+{
+private:
+    void initialize(int N, int D_imp, int seed);
+
+public:
+    // Constructor
+    NormalizedGlm(int N, int D_imp);
+    NormalizedGlm(int N, int D_imp, int seed);
+    ~NormalizedGlm() {}
+
+    // Getters
+    BiasCurrent* get_bias_component() { return bias; }
+    DirichletImpulseCurrent* get_impulse_component() { return static_cast<DirichletImpulseCurrent*>(impulse); }
 };
 
 

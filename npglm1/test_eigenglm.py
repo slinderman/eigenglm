@@ -11,10 +11,11 @@ def create_test_data():
     M = 1
     N = 2
     D_imp = 5
-    glm = pe.PyGlm(N, D_imp)
+    # glm = pe.PyStandardGlm(N, D_imp)
+    glm = pe.PyNormalizedGlm(N, D_imp)
     sts = []
     for m in range(M):
-        T = 6000
+        T = 60000
         dt = 1.0
         S = np.random.randint(0,10,T).astype(np.double)
 
@@ -116,6 +117,39 @@ def test_w_ir_grads(glm, sts):
     print "True dll:\t", llf_true - ll0
     print "Exp dll:\t", llf_exp - ll0
 
+def test_g_ir_grads(glm, sts):
+    # Get the initial LL and weights
+    ll0 = glm.log_likelihood()
+    g0 = glm.get_g_ir()
+    print "g0: ", g0
+    n_pre = 0
+
+    # Get the gradient
+    dll_dg = glm.get_dll_dg(sts[0], n_pre)
+    print "dll_dg ", dll_dg
+
+    for m in range(1, len(sts)):
+        dll_dg += glm.get_dll_dg(sts[m], n_pre)
+
+    # Add a small amount of noise to w
+    gf = g0.copy()
+    delta_g = np.zeros(glm.D_imp)
+    delta_g[0] = 1e-6
+    # delta_g = 1e-6 * np.random.randn(glm.D_imp)
+    gf[n_pre,:] += delta_g
+    glm.set_g_ir(gf)
+
+    gf_test = glm.get_g_ir()
+    assert np.allclose(gf, gf_test)
+
+    # Compute true and expected llf
+    llf_true = glm.log_likelihood()
+    llf_exp = ll0 + np.dot(dll_dg, delta_g)
+
+    print "True dll:\t", llf_true - ll0
+    print "Exp dll:\t", llf_exp - ll0
+
+
 def test_coord_descent(glm, sts):
     # Plot the first data
     plt.figure()
@@ -191,9 +225,10 @@ def test_resample(glm, sts):
 glm, sts = create_test_data()
 
 for i in range(1):
-    test_w_ir_grads(glm, sts)
+    # test_w_ir_grads(glm, sts)
+    test_g_ir_grads(glm, sts)
 
 # test_coord_descent(glm, sts)
-test_resample(glm, sts)
+# test_resample(glm, sts)
 
 

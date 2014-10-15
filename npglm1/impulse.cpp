@@ -194,18 +194,20 @@ DirichletImpulseCurrent::DirichletImpulseCurrent(Glm* glm, int N, int D_imp, std
 }
 
 
-VectorXd DirichletImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n)
+VectorXd DirichletImpulseCurrent::d_ll_d_g(SpikeTrain* st, int n)
 {
     // For the linear impulse response I_imp = filtered_S * w
     // so d_I_imp_d_w = filtered_S
-    return (glm->d_ll_d_I_imp(st, n).transpose() * st->filtered_S[n]);
+    VectorXd dll_dw = (glm->d_ll_d_I_imp(st, n).transpose() * st->filtered_S[n]);
+    VectorXd dll_dg = dll_dw.array() * prior->grad_dirichlet(g_ir[n]).array();
+    return dll_dg;
 }
 
-void DirichletImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer)
+void DirichletImpulseCurrent::d_ll_d_g(SpikeTrain* st, int n, double* dg_buffer)
 {
     // Copy the impulse response weights into a buffer
-    NPVector<double> dw(dw_buffer, DirichletImpulseCurrent::D_imp);
-    dw = DirichletImpulseCurrent::d_ll_d_w(st, n);
+    NPVector<double> dg(dg_buffer, DirichletImpulseCurrent::D_imp);
+    dg = DirichletImpulseCurrent::d_ll_d_g(st, n);
 }
 
 MatrixXd DirichletImpulseCurrent::compute_current(SpikeTrain* st)
@@ -232,15 +234,28 @@ void DirichletImpulseCurrent::get_w(double* w_buffer)
     }
 }
 
-void DirichletImpulseCurrent::set_w(double* w_buffer)
+void DirichletImpulseCurrent::get_g(double* g_buffer)
 {
     // Copy the impulse response weights into a buffer
-    NPMatrix<double> w(w_buffer, DirichletImpulseCurrent::N, DirichletImpulseCurrent::D_imp);
+    NPMatrix<double> g(g_buffer, DirichletImpulseCurrent::N, DirichletImpulseCurrent::D_imp);
     for (int n=0; n<DirichletImpulseCurrent::N; n++)
     {
-        w_ir[n] = w.row(n);
+        g.row(n) = g_ir[n];
     }
 }
+
+void DirichletImpulseCurrent::set_g(double* g_buffer)
+{
+    // Copy the impulse response weights into a buffer
+    NPMatrix<double> g(g_buffer, DirichletImpulseCurrent::N, DirichletImpulseCurrent::D_imp);
+    for (int n=0; n<DirichletImpulseCurrent::N; n++)
+    {
+        g_ir[n] = g.row(n);
+        // Update w accordingly
+        w_ir[n] = prior->as_dirichlet(g_ir[n]);
+    }
+}
+
 
 /**
  *  Normalized Impulse HMC Sampler
@@ -284,7 +299,7 @@ MatrixXd DirichletImpulseCurrent::ImpulseHmcSampler::grad(MatrixXd x)
          it != glm->spike_trains.end();
          ++it)
     {
-        grad += parent->d_ll_d_w(*it, n_pre) * parent->prior->grad_dirichlet(x);
+        grad += parent->d_ll_d_g(*it, n_pre);
     }
 
     return grad;
@@ -308,7 +323,7 @@ void DirichletImpulseCurrent::coord_descent_step(double momentum)
              it != glm->spike_trains.end();
              ++it)
         {
-            grad += DirichletImpulseCurrent::d_ll_d_w(*it, n) * prior->grad_dirichlet(w_ir[n]);
+            grad += DirichletImpulseCurrent::d_ll_d_g(*it, n);
         }
 
         // Update w_ir
