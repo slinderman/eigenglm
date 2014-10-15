@@ -1,5 +1,5 @@
 # distutils: language = c++
-# distutils: sources = glm.cpp
+# distutils: sources = glm.cpp impulse.cpp
 # distutils: libraries = stdc++
 # distutils: extra_compile_args = -std=c++11
 

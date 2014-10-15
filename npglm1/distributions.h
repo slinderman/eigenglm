@@ -98,7 +98,7 @@ public:
 
         for (int d=0; d < this->D; d++)
         {
-            this->gammas.push_back(std::gamma_distribution<double>(alpha(d)));
+            this->gammas.push_back(std::gamma_distribution<double>(alpha(d), 1.0));
         }
     }
 
@@ -129,19 +129,34 @@ public:
         return x;
     }
 
-    MatrixXd as_dirichlet(MatrixXd x)
+    VectorXd as_dirichlet(VectorXd x)
     {
-        MatrixXd p(x.rows(), x.cols());
+        VectorXd p(D);
+        double Z = x.array().abs().sum();
+
+        for (int d=0; d<D; d++)
+        {
+            p(d) = fabs(x(d)) / Z;
+        }
+        return p;
+    }
+
+    MatrixXd grad_dirichlet(MatrixXd x)
+    {
+        // w_d = |g_d| / \sum_{d'} |g_d'|
+        // d_wd/d_gd = sign(g_d) * sum_{d'\neq d} |g_d'|
+        MatrixXd g(x.rows(), x.cols());
         double Z = x.array().abs().sum();
 
         for (int i=0; i<x.rows(); i++)
         {
             for (int j=0; j<x.cols(); j++)
             {
-                p(i,j) = abs(x(i,j)) / Z;
+                int sign = -1 + 2 * (x(i,j) > 0);
+                g(i,j) = sign * (Z - fabs(x(i,j)));
             }
         }
-        return p;
+        return g;
     }
 };
 

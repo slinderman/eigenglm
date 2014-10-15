@@ -133,6 +133,54 @@ public:
 
 };
 
+class DirichletImpulseCurrent
+{
+private:
+    // Dirichlet parameters (real valued, unconstrained)
+    Dirichlet* prior;
+    Glm* glm;
+    int N, D_imp;
+
+    // Nested class for sampling
+    class ImpulseHmcSampler : public AdaptiveHmcSampler
+    {
+    int n_pre;
+    DirichletImpulseCurrent* parent;
+    public:
+        ImpulseHmcSampler(DirichletImpulseCurrent* parent,
+                          std::default_random_engine rng,
+                          int n_steps=1);
+        double logp(MatrixXd x);
+        MatrixXd grad(MatrixXd x);
+        void set_n_pre(int n_pre);
+    };
+
+    ImpulseHmcSampler* sampler;
+
+public:
+    // A vector of impulse response weights for each presynaptic neuron.
+    vector<VectorXd> g_ir;
+    vector<VectorXd> w_ir;
+
+    // Constructor
+    DirichletImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng);
+
+    // Getters
+    MatrixXd compute_current(SpikeTrain* st);
+    void get_w(double* w_buffer);
+    void set_w(double* w_buffer);
+    double log_probability() {return 0.0; }
+
+    // Gradients
+    VectorXd d_ll_d_w(SpikeTrain* st, int n);
+    void d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer);
+
+    // Inference
+    void coord_descent_step(double momentum);
+    void resample();
+};
+
+
 //class StimulusCurrent : public Component
 //{
 //public:
@@ -167,7 +215,8 @@ public:
 
     // Subcomponents
     BiasCurrent *bias;
-    LinearImpulseCurrent *impulse;
+    //LinearImpulseCurrent *impulse;
+    DirichletImpulseCurrent *impulse;
     SmoothRectLinearLink *nlin;
     VectorXd A;
     VectorXd W;
@@ -183,7 +232,8 @@ public:
     // Getters
     BiasCurrent* get_bias_component() { return bias; }
 
-    LinearImpulseCurrent* get_impulse_component() { return impulse; }
+    //LinearImpulseCurrent* get_impulse_component() { return impulse; }
+    DirichletImpulseCurrent* get_impulse_component() { return impulse; }
 
     void get_firing_rate(SpikeTrain *s, VectorXd *fr);
 

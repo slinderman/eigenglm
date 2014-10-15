@@ -14,7 +14,7 @@ def create_test_data():
     glm = pe.PyGlm(N, D_imp)
     sts = []
     for m in range(M):
-        T = 600
+        T = 6000
         dt = 1.0
         S = np.random.randint(0,10,T).astype(np.double)
 
@@ -190,7 +190,7 @@ def test_resample(glm, sts):
 
 glm, sts = create_test_data()
 
-for i in range(5):
+for i in range(1):
     test_w_ir_grads(glm, sts)
 
 # test_coord_descent(glm, sts)
