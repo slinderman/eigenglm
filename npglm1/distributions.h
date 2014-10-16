@@ -8,14 +8,19 @@
 #include <Eigen/Dense>
 #include <random>
 #include <math.h>
+#include "nptypes.h"
+
 
 using namespace Eigen;
+using namespace nptypes;
 
 class Distribution
 {
 protected:
     std::default_random_engine rng;
 public:
+    Distribution() {}
+
     Distribution(std::default_random_engine rng)
     {
         this->rng = rng;
@@ -36,6 +41,20 @@ class DiagonalGuassian : public Distribution
     std::normal_distribution<double> normal;
 
 public:
+    DiagonalGuassian()
+    {
+        this->D = 1;
+        mu = VectorXd::Zero(D);
+        sigma = VectorXd::Ones(D);
+
+        // Initialize random number generator
+    //        std::default_random_engine rng;
+    //        Distribution::Distribution(rng);
+    //        this->rng = rng;
+
+        this->normal = std::normal_distribution<double>(0.0, 1.0);
+    }
+
     DiagonalGuassian(VectorXd mu,
                      VectorXd sigma,
                      std::default_random_engine rng) :
@@ -57,9 +76,26 @@ public:
         return Z + -0.5*(((x-mu).array()/sigma.array()).pow(2)).sum();
     }
 
+    double logp(double* x_buffer)
+    {
+        NPMatrix<double> x_np(x_buffer, D, 1);
+        MatrixXd x = x_np;
+        return DiagonalGuassian::logp(x);
+    }
+
     void grad(MatrixXd x, MatrixXd* dx)
     {
         *dx = -(x-mu).array()/sigma.array();
+    }
+
+    void grad(double* x_buffer, double* dx_buffer)
+    {
+        NPMatrix<double> x_np(x_buffer, D, 1);
+        NPMatrix<double> dx_np(dx_buffer, D, 1);
+        MatrixXd x = x_np;
+        MatrixXd dx(x.rows(), x.cols());
+        DiagonalGuassian::grad(x, &dx);
+        dx_np = dx;
     }
 
     MatrixXd sample()
@@ -89,6 +125,17 @@ class Dirichlet : public Distribution
     std::vector<std::gamma_distribution<double>> gammas;
 
 public:
+    Dirichlet(int D)
+    {
+        this->D = D;
+        this->alpha = VectorXd::Constant(this->D, 0.1);
+
+        for (int d=0; d < this->D; d++)
+        {
+            this->gammas.push_back(std::gamma_distribution<double>(alpha(d), 1.0));
+        }
+    }
+
     Dirichlet(VectorXd alpha,
               std::default_random_engine rng) :
               Distribution(rng)
@@ -106,17 +153,36 @@ public:
 
     double logp(MatrixXd x)
     {
-        // (self.alpha-1.0) * T.sum(T.log(abs(g))) - T.sum(abs(g))
+        // sum_d (alpha_d -1)*log(abs(x_d)) - sum(abs(x_d))
         return ((alpha.array() - 1.) * x.array().abs().log()).sum() -
                x.array().abs().sum();
     }
 
+    double logp(double* x_buffer)
+    {
+        NPVector<double> x_np(x_buffer, D);
+        MatrixXd x = x_np;
+        return Dirichlet::logp(x);
+    }
+
     void grad(MatrixXd x, MatrixXd* dx)
     {
-        // dlp/dx_d = sign(g_d) * (alpha_d - 1)/ |g_d| - sign(g_d)
-        //          = sign(g_d) * ((alpha_d - 1)/ |g_d| - 1)
+        // dlp/dx_d = sign(x_d) * (alpha_d-1) / abs(x_d) - sign(x_d)
+        //          = sign(g_d) * ((alpha_d - 1) / abs(g_d) - 1)
+        //          = (alpha_d-1)/x_d - sign(x_d)
         ArrayXd xsign = -1.0 + 2.0*(x.array() > 0).cast<double>();
-        *dx = xsign * ((alpha.array()-1)/x.array().abs() - 1.);
+        *dx = (alpha.array()-1)/x.array() - xsign;
+//        *dx = xsign * ((alpha.array()-1)/x.array().abs() - 1.);
+    }
+
+    void grad(double* x_buffer, double* dx_buffer)
+    {
+        NPMatrix<double> x_np(x_buffer, D, 1);
+        NPMatrix<double> dx_np(dx_buffer, D, 1);
+        MatrixXd x = x_np;
+        MatrixXd dx(x.rows(), x.cols());
+        Dirichlet::grad(x, &dx);
+        dx_np = dx;
     }
 
     MatrixXd sample()
