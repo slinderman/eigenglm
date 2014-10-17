@@ -14,9 +14,15 @@ def create_test_data(N, T, dt=1.0):
             'S' : S}
 
 def run():
-    # Make the GLM object
+    # Specify the number of neurons in the population
     N = 1
+
+    # Make a parameters object that we can modify
     prms = StandardGLMParameters()
+    # E.g. change the number of basis elements
+    prms.impulse.basis.n_bas = 5
+
+    # Make the GLM object
     glm = StandardGLM(0, N, prms)
 
     # Make some fake data
