@@ -228,7 +228,7 @@ for i in range(1):
     # test_w_ir_grads(glm, sts)
     test_g_ir_grads(glm, sts)
 
-# test_coord_descent(glm, sts)
+test_coord_descent(glm, sts)
 # test_resample(glm, sts)
 
 

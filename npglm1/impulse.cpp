@@ -199,7 +199,7 @@ VectorXd DirichletImpulseCurrent::d_ll_d_g(SpikeTrain* st, int n)
     // For the linear impulse response I_imp = filtered_S * w
     // so d_I_imp_d_w = filtered_S
     VectorXd dll_dw = (glm->d_ll_d_I_imp(st, n).transpose() * st->filtered_S[n]);
-    VectorXd dll_dg = dll_dw * prior->grad_dirichlet(g_ir[n]);
+    VectorXd dll_dg = dll_dw.transpose() * prior->grad_dirichlet(g_ir[n]);
     return dll_dg;
 }
 
