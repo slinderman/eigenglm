@@ -149,7 +149,6 @@ def test_g_ir_grads(glm, sts):
     print "True dll:\t", llf_true - ll0
     print "Exp dll:\t", llf_exp - ll0
 
-
 def test_network_column(glm):
     print "A: ", glm.get_A()
     print "W: ", glm.get_W()
