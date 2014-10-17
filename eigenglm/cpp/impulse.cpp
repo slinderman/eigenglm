@@ -50,10 +50,8 @@ void LinearImpulseCurrent::coord_descent_step(double momentum)
     // Update each of the impulse response weights
     for (int n=0; n<N; n++)
     {
-//        VectorXd grad = VectorXd::Constant(D_imp, 0.0);
         MatrixXd grad(D_imp,1);
         prior->grad(w_ir[n], &grad);
-
 
         // Get the gradient with respect to each spike train
         for (vector<SpikeTrain*>::iterator it = glm->spike_trains.begin();
@@ -70,7 +68,7 @@ void LinearImpulseCurrent::coord_descent_step(double momentum)
 
 MatrixXd LinearImpulseCurrent::compute_current(SpikeTrain* st)
 {
-    MatrixXd I_imp = MatrixXd::Random(st->T, st->N);
+    MatrixXd I_imp(st->T, st->N);
 
     // Each column of the output matrix is a matrix vector product
     // of the filtered spike train for neuron n and the impulse

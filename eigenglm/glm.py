@@ -4,6 +4,8 @@ likelihood calculation.
 """
 import numpy as np
 from scipy.misc import logsumexp
+
+from hips.plotting.layout import *
 from hips.inference.log_sum_exp import log_sum_exp_sample
 from hips.inference.ars2 import AdaptiveRejectionSampler
 
@@ -15,6 +17,9 @@ class _GLM(object):
     """
     Base class to be subclassed with specific implementations.
     """
+    spiketrains = []
+    glm = None
+
     def __init__(self, n, N):
         """
         Default constructor
@@ -58,13 +63,33 @@ class _GLM(object):
     def resample(self):
         raise NotImplementedError()
 
+    def sample(self):
+        raise NotImplementedError()
+
+    def plot_firing_rate(self, data=None, color=None, T_lim=None, plot_currents=True, ax=None):
+        # TODO: Plot the given spike train
+
+        # HACK: For now just plot the first spike train
+        st = self.spiketrains[0]
+        tt = st['dt'] * np.arange(0, st['T'])
+        fr = self.glm.get_firing_rate(st)
+
+        # Make a figure
+        ax_given = ax is not None
+        if not ax_given:
+            fig = create_figure((4,3))
+            ax = fig.add_subplot(1,1,1)
+        ax.plot(tt, fr, color=color)
+
+        if not ax_given:
+            return ax
+
+
 
 ##
 #  Standard GLM implementation
 #
 class StandardGLM(_GLM):
-    spiketrains = []
-    glm = None
 
     def __init__(self, n, N, params):
         super(StandardGLM, self).__init__(n, N)
@@ -117,9 +142,6 @@ class StandardGLM(_GLM):
         self.glm.resample()
 
 class NormalizedGLM(_GLM):
-    spiketrains = []
-    glm = None
-
     def __init__(self, n, N, params):
         super(NormalizedGLM, self).__init__(n, N)
 
@@ -173,7 +195,7 @@ class NormalizedGLM(_GLM):
         Do collapsed Gibbs sampling for an entry A_{n,n'} and W_{n,n'} where
         n = n_pre and n' = n_post.
         """
-        GAUSS_HERMITE_ABSCISSAE, GAUSS_HERMITE_WEIGHTS = \
+        gauss_hermite_abscissae, gauss_hermite_weights = \
             np.polynomial.hermite.hermgauss(deg_gauss_hermite)
 
         # TODO: Get the weight prior from a network object
@@ -197,13 +219,13 @@ class NormalizedGLM(_GLM):
             # Approximate G = \int_0^\infty p({s,c} | A, W) p(W_{n,n'}) dW_{n,n'}
             log_L = np.zeros(deg_gauss_hermite)
             weighted_log_L = np.zeros(deg_gauss_hermite)
-            W_nns = np.sqrt(2) * sigma_w[n_pre] * GAUSS_HERMITE_ABSCISSAE + mu_w[n_pre]
+            W_nns = np.sqrt(2) * sigma_w[n_pre] * gauss_hermite_abscissae + mu_w[n_pre]
             for i in np.arange(deg_gauss_hermite):
                 # Set the weight for the incoming connection
                 self.glm.set_W(n_pre, W_nns[i])
 
                 # Compute the Gauss hermite weight
-                w = GAUSS_HERMITE_WEIGHTS[i]
+                w = gauss_hermite_weights[i]
 
 
                 # Compute the log likelihood
