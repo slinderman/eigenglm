@@ -15,7 +15,7 @@ def create_test_data():
     glm = pe.PyNormalizedGlm(N, D_imp)
     sts = []
     for m in range(M):
-        T = 60000
+        T = 600
         dt = 1.0
         S = np.random.randint(0,10,T).astype(np.double)
 
@@ -150,6 +150,25 @@ def test_g_ir_grads(glm, sts):
     print "Exp dll:\t", llf_exp - ll0
 
 
+def test_network_column(glm):
+    print "A: ", glm.get_A()
+    print "W: ", glm.get_W()
+
+    W = np.random.randn(glm.N)
+    for n in range(glm.N):
+        print "Setting W[%d] = %.3f" % (n, W[n])
+        glm.set_W(n, W[n])
+        print glm.get_W()
+
+    A = np.random.rand(glm.N) < 0.5
+    A = A.astype(np.double)
+    for n in range(glm.N):
+        print "Setting A[%d] = %d" % (n, A[n])
+        glm.set_A(n, A[n])
+        print glm.get_A()
+
+    print glm.log_probability()
+
 def test_coord_descent(glm, sts):
     # Plot the first data
     plt.figure()
@@ -224,11 +243,12 @@ def test_resample(glm, sts):
 
 glm, sts = create_test_data()
 
-for i in range(1):
-    # test_w_ir_grads(glm, sts)
-    test_g_ir_grads(glm, sts)
+# for i in range(1):
+#     # test_w_ir_grads(glm, sts)
+#     test_g_ir_grads(glm, sts)
 
-test_coord_descent(glm, sts)
+# test_coord_descent(glm, sts)
 # test_resample(glm, sts)
 
+test_network_column(glm)
 

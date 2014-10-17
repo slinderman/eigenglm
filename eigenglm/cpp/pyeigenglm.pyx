@@ -1,7 +1,7 @@
 # distutils: language = c++
 # distutils: sources = eigenglm/cpp/eigenglm.cpp eigenglm/cpp/impulse.cpp
 # distutils: libraries = stdc++
-# distutils: extra_compile_args = -std=c++11
+# distutils: extra_compile_args = -std=c++11 -O3
 
 import numpy as np
 cimport numpy as np
@@ -31,6 +31,14 @@ cdef extern from "eigenglm.h":
         void get_g(double* g_buffer)
         void set_g(double* g_buffer)
 
+    # Gaussian network class
+    cdef cppclass GaussianNetworkColumn:
+        void get_A(double* A_buffer)
+        void get_W(double* W_buffer)
+        void set_A(int n_pre, double a)
+        void set_W(int n_pre, double w)
+
+
     # Main GLM class
     cdef cppclass StandardGlm:
         StandardGlm(int, int) except +
@@ -55,6 +63,7 @@ cdef extern from "eigenglm.h":
         # Getters
         BiasCurrent* get_bias_component()
         DirichletImpulseCurrent* get_impulse_component()
+        GaussianNetworkColumn* get_network_component()
         double log_likelihood()
         double log_probability()
         void get_firing_rate(SpikeTrain *s, double* fr)
@@ -183,6 +192,22 @@ cdef class PyNormalizedGlm:
     def set_g_ir(self, double[:,::1] g):
         assert g.shape[0] == self.N and g.shape[1] == self.D_imp, "w is not the correct shape!"
         self.thisptr.get_impulse_component().set_g(&g[0,0])
+
+    def get_A(self):
+        cdef double[::1] A = np.zeros(self.N)
+        self.thisptr.get_network_component().get_A(&A[0])
+        return np.asarray(A)
+
+    def get_W(self):
+        cdef double[::1] W = np.zeros(self.N)
+        self.thisptr.get_network_component().get_W(&W[0])
+        return np.asarray(W)
+
+    def set_A(self, int n_pre, double a):
+        self.thisptr.get_network_component().set_A(n_pre, a)
+
+    def set_W(self, int n_pre, double w):
+        self.thisptr.get_network_component().set_W(n_pre, w)
 
     def get_dll_dg(self, PySpikeTrain st, int n):
         cdef double[::1] dg = np.zeros(self.D_imp)

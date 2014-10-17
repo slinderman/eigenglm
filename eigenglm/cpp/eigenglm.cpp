@@ -48,17 +48,17 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vec
 /**
  *  Bias current.
  */
-BiasCurrent::BiasCurrent(Glm* glm, double bias, std::default_random_engine rng)
+BiasCurrent::BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, double sigma)
 {
     parent = glm;
 
     // Create a Gaussian prior
-    VectorXd mu(1);
-    mu(0) = 1.0;
-    VectorXd sigma(1);
-    sigma(0) = 1.0;
+    VectorXd mu_vec(1);
+    mu_vec(0) = mu;
+    VectorXd sigma_vec(1);
+    sigma_vec(0) = sigma;
 
-    prior = new DiagonalGuassian(mu, sigma, rng);
+    prior = new DiagonalGuassian(mu_vec, sigma_vec, rng);
     I_bias = prior->sample()(0);
 
     // Initialize the sampler. The number of steps is set in glm.h
@@ -72,7 +72,8 @@ BiasCurrent::~BiasCurrent()
 
 double BiasCurrent::log_probability()
 {
-    return 0.0;
+    NPVector<double> np_I_bias(&I_bias, 1);
+    return prior->logp(np_I_bias);
 }
 
 void BiasCurrent::coord_descent_step(double momentum)
@@ -172,6 +173,81 @@ VectorXd SmoothRectLinearLink::d_firing_rate_d_I(VectorXd I)
     return I.array().exp() / (1.0 + I.array().exp());
 }
 
+/**
+ *  Network classes.
+ */
+void NetworkColumn::get_A(VectorXd* A_buffer)
+{
+    *A_buffer = A;
+}
+
+void NetworkColumn::get_A(double* A_buffer)
+{
+    NPVector<double> np_A(A_buffer, A.size());
+
+    // Copy the result back to A
+    np_A = A;
+}
+
+void NetworkColumn::get_W(VectorXd* W_buffer)
+{
+    *W_buffer = W;
+}
+
+void NetworkColumn::get_W(double* W_buffer)
+{
+    NPVector<double> np_W(W_buffer, W.size());
+
+    // Copy the result back to W
+    np_W = W;
+}
+
+ConstantNetworkColumn::ConstantNetworkColumn(Glm* glm)
+{
+    this->glm = glm;
+
+    // Initialize a constant
+    A = VectorXd::Ones(glm->N);
+    W = VectorXd::Ones(glm->N);
+}
+
+GaussianNetworkColumn::GaussianNetworkColumn(Glm* glm,
+                                             std::default_random_engine rng,
+                                             double mu,
+                                             double sigma)
+{
+    this->glm = glm;
+
+    // Initialize adjacency matrix to fully connected
+    A = VectorXd::Ones(glm->N);
+
+    // Create a Gaussian prior for W
+    VectorXd mu_vec = VectorXd::Constant(glm->N, mu);
+    VectorXd sigma_vec = VectorXd::Constant(glm->N, sigma);
+    prior = new DiagonalGuassian(mu_vec, sigma_vec, rng);
+
+
+    // Sample a weight matrix from the prior
+    W = prior->sample();
+}
+
+void GaussianNetworkColumn::set_A(int n_pre, double a)
+{
+    A(n_pre) = a;
+}
+
+void GaussianNetworkColumn::set_W(int n_pre, double w)
+{
+    W(n_pre) = w;
+}
+
+double GaussianNetworkColumn::log_probability()
+{
+    return prior->logp(W);
+}
+
+void GaussianNetworkColumn::resample() {}
+void GaussianNetworkColumn::coord_descent_step(double momentum) {}
 
 /**
  *  GLM class
@@ -191,8 +267,6 @@ void Glm::add_spike_train(SpikeTrain *s)
 
 void Glm::get_firing_rate(SpikeTrain* s, VectorXd *fr)
 {
-//    fr.array() *= 0;
-
     // Compute the total current for this spike train.
     VectorXd I = VectorXd::Constant(s->T, 0.0);
 
@@ -201,7 +275,7 @@ void Glm::get_firing_rate(SpikeTrain* s, VectorXd *fr)
 
     // Add the weighted impulse responses
     MatrixXd I_imp = impulse->compute_current(s);
-    I += I_imp * (A.array() * W.array()).matrix();
+    I += I_imp * (network->A.array() * network->W.array()).matrix();
 
     // Compute the firing rate and its log.
     *fr = nlin->compute_firing_rate(I);
@@ -244,6 +318,7 @@ double Glm::log_probability()
     lp += bias->log_probability();
     lp += impulse->log_probability();
     lp += nlin->log_probability();
+    lp += network->log_probability();
 
     // Add the likelihood.
     lp += log_likelihood();
@@ -251,11 +326,15 @@ double Glm::log_probability()
     return lp;
 }
 
+// Getters and setters
+
+
+// Gradients
 double Glm::d_ll_d_bias(SpikeTrain* s)
 {
     // Overloaded function if we don't have I_stim or I_net precomputed
     MatrixXd I_imp = impulse->compute_current(s);
-    VectorXd I_net = I_imp * (A.array() * W.array()).matrix();
+    VectorXd I_net = I_imp * (network->A.array() * network->W.array()).matrix();
     VectorXd I_stim = VectorXd::Constant(I_net.size(), 0);
 
     return d_ll_d_bias(s, I_stim, I_net);
@@ -302,7 +381,7 @@ VectorXd Glm::d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim)
 
     // Add in the impulse current
     MatrixXd I_imp = impulse->compute_current(s);
-    VectorXd I_net = I_imp * (A.array() * W.array()).matrix();
+    VectorXd I_net = I_imp * (network->A.array() * network->W.array()).matrix();
     I += I_net;
 
     // Compute the firing rate and its log.
@@ -313,7 +392,7 @@ VectorXd Glm::d_ll_d_I_imp(SpikeTrain* s, int n, double I_bias, VectorXd I_stim)
     // TODO: Avoid divide by zero
     VectorXd d_ll_d_lam = VectorXd::Constant(s->T, -s->dt).array() + s->S.array()/lam.array();
     VectorXd d_lam_d_I = nlin->d_firing_rate_d_I(I);
-    double d_I_d_I_imp_n = A(n)  * W(n);
+    double d_I_d_I_imp_n = network->A(n)  * network->W(n);
 
     // Multiply em up!
     VectorXd d_ll_d_I_imp_n = d_ll_d_lam.array() * d_lam_d_I.array() * d_I_d_I_imp_n;
@@ -326,7 +405,7 @@ void Glm::coord_descent_step(double momentum)
     // Call subcomponent resample methods.
     bias->coord_descent_step(momentum);
     impulse->coord_descent_step(momentum);
-
+    network->coord_descent_step(momentum);
 }
 
 void Glm::resample()
@@ -334,6 +413,7 @@ void Glm::resample()
     // Call subcomponent resample methods.
     bias->resample();
     impulse->resample();
+    network->resample();
 }
 
 /**
@@ -341,17 +421,16 @@ void Glm::resample()
  */
 void StandardGlm::initialize(int N, int D_imp, int seed)
 {
+    this->N = N;
+
     // Initialize random number generator
     std::default_random_engine rng(seed);
 
     // Standard GLM
-    Glm::bias = new BiasCurrent(this, 1.0, rng);
-    Glm::impulse = new LinearImpulseCurrent(this, N, D_imp, rng);
-    Glm::nlin = new SmoothRectLinearLink();
-
-    // Make a network
-    Glm::A = VectorXd::Ones(N);
-    Glm::W = VectorXd::Ones(N);
+    this->bias = new BiasCurrent(this, rng, 1.0, 1.0);
+    this->impulse = new LinearImpulseCurrent(this, N, D_imp, rng);
+    this->nlin = new SmoothRectLinearLink();
+    this->network = new ConstantNetworkColumn(this);
 }
 
 StandardGlm::StandardGlm(int N, int D_imp, int seed)
@@ -370,17 +449,16 @@ StandardGlm::StandardGlm(int N, int D_imp)
  */
 void NormalizedGlm::initialize(int N, int D_imp, int seed)
 {
+    this->N = N;
+
     // Initialize random number generator
     std::default_random_engine rng(seed);
 
     // Normalized GLM
-    Glm::bias = new BiasCurrent(this, 1.0, rng);
-    Glm::impulse = new DirichletImpulseCurrent(this, N, D_imp, rng);
-    Glm::nlin = new SmoothRectLinearLink();
-
-    // Make a network
-    Glm::A = VectorXd::Ones(N);
-    Glm::W = VectorXd::Ones(N);
+    this->bias = new BiasCurrent(this, rng, 1.0, 1.0);
+    this->impulse = new DirichletImpulseCurrent(this, N, D_imp, rng);
+    this->nlin = new SmoothRectLinearLink();
+    this->network = new GaussianNetworkColumn(this, rng, 1.0, 1.0);
 }
 
 NormalizedGlm::NormalizedGlm(int N, int D_imp, int seed)

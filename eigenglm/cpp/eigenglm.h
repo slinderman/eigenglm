@@ -80,7 +80,7 @@ class BiasCurrent : public Component
 public:
     double I_bias;
 
-    BiasCurrent(Glm* glm, double bias, std::default_random_engine rng);
+    BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, double sigma);
     ~BiasCurrent();
 
     double log_probability();
@@ -203,6 +203,46 @@ public:
 //{
 //}
 
+class NetworkColumn : public Component
+{
+protected:
+    Glm* glm;
+public:
+    VectorXd A;
+    VectorXd W;
+
+    // Getters and setters
+    void get_A(VectorXd *A_buffer);
+    void get_A(double *A_buffer);
+
+    void get_W(VectorXd *W_buffer);
+    void get_W(double *W_buffer);
+
+};
+
+class ConstantNetworkColumn : public NetworkColumn
+{
+public:
+    ConstantNetworkColumn(Glm* glm);
+    double log_probability() { return 0.0; }
+    void coord_descent_step(double momentum) {}
+    void resample() {}
+};
+
+class GaussianNetworkColumn : public NetworkColumn
+{
+    Distribution* prior;
+
+public:
+    GaussianNetworkColumn(Glm* glm, std::default_random_engine rng, double mu, double sigma);
+    void set_A(int n_pre, double a);
+    void set_W(int n_pre, double w);
+
+    double log_probability();
+    void coord_descent_step(double momentum);
+    void resample();
+};
+
 class SmoothRectLinearLink : public Component
 {
 public:
@@ -222,10 +262,14 @@ protected:
     BiasCurrent *bias;
     ImpulseCurrent *impulse;
     SmoothRectLinearLink *nlin;
-    VectorXd A;
-    VectorXd W;
+    NetworkColumn* network;
+//    VectorXd A;
+//    VectorXd W;
 
 public:
+    // Number of presynaptic neurons
+    int N;
+
     // List of datasets
     std::vector<SpikeTrain*> spike_trains;
 
@@ -264,6 +308,7 @@ public:
     // Getters
     BiasCurrent* get_bias_component() { return bias; }
     LinearImpulseCurrent* get_impulse_component() { return static_cast<LinearImpulseCurrent*>(impulse); }
+    ConstantNetworkColumn* get_network_component() {return static_cast<ConstantNetworkColumn*>(network); }
 };
 
 class NormalizedGlm : public Glm
@@ -280,6 +325,7 @@ public:
     // Getters
     BiasCurrent* get_bias_component() { return bias; }
     DirichletImpulseCurrent* get_impulse_component() { return static_cast<DirichletImpulseCurrent*>(impulse); }
+    GaussianNetworkColumn* get_network_component() {return static_cast<GaussianNetworkColumn*>(network); }
 };
 
 

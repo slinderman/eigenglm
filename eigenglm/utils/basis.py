@@ -4,7 +4,53 @@ import numpy as np
 import scipy.linalg
 
 from eigenglm.utils import fftconv
+from eigenglm.parameters import BasisParameters
 
+class Basis:
+
+    def __init__(self, prms):
+        assert isinstance(prms, BasisParameters), "Basis must be initialized with " \
+                                                  "a BasisParameters object!"
+
+        self.params = prms
+        self.basis = create_basis(prms)
+
+    def convolve_with_basis(self, S, dt, dt_max):
+        """
+        Convolve an input matrix S (e.g. a spike train or a stimulus matrix)
+        :param S: TxN matrix whose columns are to be filtered
+        :param dt: the bin size for each row of S
+        :param dt_max: the length of the basis
+        :return: a list of length N where each entry is a TxD matrix of S[:,n]
+                 convolved with the basis
+        """
+        T, N = S.shape
+        D_imp = self.params.D
+        L = self.params.L
+
+        # Interpolate basis at the resolution of the data
+        Lt_int = dt_max // dt
+        t_int = np.linspace(0,1, Lt_int)
+        t_bas = np.linspace(0,1,L)
+        ibasis = np.zeros((len(t_int), D_imp))
+        for b in np.arange(D_imp):
+            ibasis[:,b] = np.interp(t_int, t_bas, self.basis[:,b])
+
+        # Filter the spike train
+        filtered_S = []
+        for n in range(N):
+            Sn = S[:,n].reshape((-1,1))
+            fS = convolve_with_basis(Sn, ibasis)
+
+            # Flatten this manually to be safe
+            # (there's surely a way to do this with numpy)
+            (nT,Nc,Nb) = fS.shape
+            assert Nc == 1 and Nb==D_imp, \
+                "ERROR: Convolution with matrix " \
+                "resulted in incorrect shape: %s" % str(fS.shape)
+            filtered_S.append(fS[:,0,:])
+
+        return filtered_S
 
 def create_basis(prms):
     """ Create a basis for impulse response functions
