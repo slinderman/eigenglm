@@ -156,16 +156,24 @@ void LinearImpulseCurrent::resample()
     // Sample each presynaptic impulse response in turn.
     for (int n_pre=0; n_pre<N; n_pre++)
     {
-        // Tell the sampler which impulse to sample.
-        sampler->set_n_pre(n_pre);
+        // Only sample if there is a synapse from n_pre.
+        if (glm->network->A(n_pre))
+        {
+            // Tell the sampler which impulse to sample.
+            sampler->set_n_pre(n_pre);
 
-        // Use the ImpulseHmcSampler to update the bias
-        MatrixXd x_next(D_imp,1);
+            // Use the ImpulseHmcSampler to update the bias
+            MatrixXd x_next(D_imp,1);
 
-        sampler->sample(w_ir[n_pre], &x_next);
+            sampler->sample(w_ir[n_pre], &x_next);
 
-        // Set the new bias
-        w_ir[n_pre] = x_next;
+            // Set the new bias
+            w_ir[n_pre] = x_next;
+        }
+        else
+        {
+            w_ir[n_pre] = prior->sample();
+        }
     }
 }
 
@@ -337,16 +345,24 @@ void DirichletImpulseCurrent::resample()
     // Sample each presynaptic impulse response in turn.
     for (int n_pre=0; n_pre<N; n_pre++)
     {
-        // Tell the sampler which impulse to sample.
-        sampler->set_n_pre(n_pre);
+        // Only sample if there is a synapse from n_pre.
+        if (glm->network->A(n_pre))
+        {
+            // Tell the sampler which impulse to sample.
+            sampler->set_n_pre(n_pre);
 
-        // Use the ImpulseHmcSampler to update the bias
-        MatrixXd x_next(D_imp,1);
+            // Use the ImpulseHmcSampler to update the bias
+            MatrixXd x_next(D_imp,1);
 
-        sampler->sample(g_ir[n_pre], &x_next);
+            sampler->sample(g_ir[n_pre], &x_next);
 
-        // Set the new bias
-        g_ir[n_pre] = x_next;
-        w_ir[n_pre] = prior->as_dirichlet(g_ir[n_pre]);
+            // Set the new bias
+            g_ir[n_pre] = x_next;
+            w_ir[n_pre] = prior->as_dirichlet(g_ir[n_pre]);
+        }
+        else
+        {
+            w_ir[n_pre] = prior->sample();
+        }
     }
 }

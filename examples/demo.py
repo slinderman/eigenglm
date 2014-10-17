@@ -6,10 +6,9 @@ from eigenglm import StandardGLM, StandardGLMParameters
 from eigenglm import NormalizedGLM, NormalizedGLMParameters
 
 # Make fake data
-def create_test_data(N, T, dt=1.0):
+def create_test_data(N, T, dt=0.001):
     # Create a fake spike trains
     S = np.random.randint(0,3,(T,N)).astype(np.double)
-
     return {'N' : N,
             'T' : T,
             'dt' : dt,
@@ -35,10 +34,9 @@ def run():
     for m in range(M):
         glm.add_data(create_test_data(N, T))
 
-    import pdb; pdb.set_trace()
-
     # Run some MCMC
     N_iters = 1000
+    print "Running ", N_iters, " iterations of MCMC."
     intvl = 25
     start = time.time()
     for i in range(N_iters):

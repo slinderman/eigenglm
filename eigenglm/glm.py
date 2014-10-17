@@ -3,6 +3,9 @@ GLM classes that use an underlying C++ implementation for inference and
 likelihood calculation.
 """
 import numpy as np
+from scipy.misc import logsumexp
+from hips.inference.log_sum_exp import log_sum_exp_sample
+from hips.inference.ars2 import AdaptiveRejectionSampler
 
 from eigenglm.parameters import *
 from eigenglm.utils.basis import Basis
@@ -164,5 +167,139 @@ class NormalizedGLM(_GLM):
     def log_probability(self, data=None):
         return self.glm.log_probability()
 
+    # Add a sampler for the network
+    def collapsed_sample_AW(self, deg_gauss_hermite=10):
+        """
+        Do collapsed Gibbs sampling for an entry A_{n,n'} and W_{n,n'} where
+        n = n_pre and n' = n_post.
+        """
+        GAUSS_HERMITE_ABSCISSAE, GAUSS_HERMITE_WEIGHTS = \
+            np.polynomial.hermite.hermgauss(deg_gauss_hermite)
+
+        # TODO: Get the weight prior from a network object
+        mu_w = np.ones(self.N)
+        sigma_w = np.ones(self.N)
+        rho = 0.5 * np.ones(self.N)
+
+        A = self.glm.get_A()
+        W = self.glm.get_W()
+
+        for n_pre in range(self.N):
+            # print "Sampling A and W for ", n_pre
+
+            # Compute the prior probabilities
+            prior_lp_A = np.log(rho[n_pre])
+            prior_lp_noA = np.log(1.0-rho[n_pre])
+
+            # First approximate the marginal likelihood with an edge
+            self.glm.set_A(n_pre, 1.0)
+
+            # Approximate G = \int_0^\infty p({s,c} | A, W) p(W_{n,n'}) dW_{n,n'}
+            log_L = np.zeros(deg_gauss_hermite)
+            weighted_log_L = np.zeros(deg_gauss_hermite)
+            W_nns = np.sqrt(2) * sigma_w[n_pre] * GAUSS_HERMITE_ABSCISSAE + mu_w[n_pre]
+            for i in np.arange(deg_gauss_hermite):
+                # Set the weight for the incoming connection
+                self.glm.set_W(n_pre, W_nns[i])
+
+                # Compute the Gauss hermite weight
+                w = GAUSS_HERMITE_WEIGHTS[i]
+
+
+                # Compute the log likelihood
+                log_L[i] = self.glm.log_likelihood()
+                assert self.glm.get_A()[n_pre] == 1
+
+                # Handle NaNs in the GLM log likelihood
+                if np.isnan(log_L[i]):
+                    log_L[i] = -np.Inf
+
+                weighted_log_L[i] = log_L[i] + np.log(w/np.sqrt(np.pi))
+
+                # Handle NaNs in the GLM log likelihood
+                if np.isnan(weighted_log_L[i]):
+                    weighted_log_L[i] = -np.Inf
+
+            # compute log pr(A_nn) and log pr(\neg A_nn) via log G
+            log_G = logsumexp(weighted_log_L)
+            if not np.isfinite(log_G):
+                print weighted_log_L
+                raise Exception("log_G not finite")
+
+            # Compute log Pr(A_nn=1) given prior and estimate of log lkhd after integrating out W
+            log_pr_A = prior_lp_A + log_G
+
+            # Compute log Pr(A_nn = 0 | {s,c}) = log Pr({s,c} | A_nn = 0) + log Pr(A_nn = 0)
+            self.glm.set_A(n_pre, 0)
+            log_pr_noA = prior_lp_noA + self.glm.log_likelihood()
+
+            if np.isnan(log_pr_noA):
+                log_pr_noA = -np.Inf
+
+            # Sample A
+            try:
+                A[n_pre] = log_sum_exp_sample(np.array([log_pr_noA, log_pr_A]))
+                self.glm.set_A(n_pre, A[n_pre])
+
+                # DEBUG
+                if np.allclose(rho[n_pre], 1.0) and not A[n_pre]:
+                    print "Sampled no self edge"
+                    print log_pr_noA
+                    print log_pr_A
+                    # raise Exception("Sampled no self edge")
+            except Exception as e:
+                raise e
+
+            # Sample W from its posterior, i.e. log_L with denominator log_G
+            # If A_nn = 0, we don't actually need to resample W since it has no effect
+            if A[n_pre] == 1:
+                W[n_pre] = self.adaptive_rejection_sample_w(n_pre, mu_w[n_pre], sigma_w[n_pre], W_nns, log_L)
+            else:
+                # Sample W from the prior
+                W[n_pre] = mu_w[n_pre] + sigma_w[n_pre] * np.random.randn()
+
+            self.glm.set_W(n_pre, W[n_pre])
+
+
+    def adaptive_rejection_sample_w(self, n_pre, mu_w, sigma_w, ws_init, log_L):
+        """
+        Sample weights using adaptive rejection sampling.
+        This only works for log-concave distributions, which will
+        be the case if the nonlinearity is convex and log concave, and
+        when the prior on w is log concave (as it is when w~Gaussian).
+        """
+        log_prior_W = -0.5/sigma_w**2 * (ws_init-mu_w)**2
+        log_posterior_W = log_prior_W + log_L
+
+        #  Define a function to evaluate the log posterior
+        # For numerical stability, try to normalize
+        Z = np.amax(log_posterior_W)
+        def _log_posterior(ws_in):
+            ws = np.asarray(ws_in)
+            shape = ws.shape
+            ws = np.atleast_1d(ws)
+            lp = np.zeros_like(ws)
+            for (i,w) in enumerate(ws):
+                self.glm.set_W(n_pre, w)
+                lp[i] = -0.5/sigma_w**2 * (w-mu_w)**2 + \
+                        self.glm.log_likelihood() - Z
+
+            if isinstance(ws_in, np.ndarray):
+                return lp.reshape(shape)
+            elif isinstance(ws_in, float) or isinstance(ws_in, np.float):
+                return np.float(lp)
+
+        # Only use the valid ws
+        valid_ws = np.bitwise_and(np.isfinite(log_posterior_W),
+                                  log_posterior_W > -1e8,
+                                  log_posterior_W < 1e8)
+
+        ars = AdaptiveRejectionSampler(_log_posterior, -np.inf, np.inf, ws_init[valid_ws], log_posterior_W[valid_ws] - Z)
+        return ars.sample()
+
+
     def resample(self):
         self.glm.resample()
+
+        # Now sample the weights
+        self.collapsed_sample_AW()

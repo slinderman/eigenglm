@@ -257,18 +257,15 @@ public:
 
 class Glm : public Component
 {
-protected:
+public:
+    // Number of presynaptic neurons
+    int N;
+
     // Subcomponents
     BiasCurrent *bias;
     ImpulseCurrent *impulse;
     SmoothRectLinearLink *nlin;
     NetworkColumn* network;
-//    VectorXd A;
-//    VectorXd W;
-
-public:
-    // Number of presynaptic neurons
-    int N;
 
     // List of datasets
     std::vector<SpikeTrain*> spike_trains;
