@@ -1,11 +1,11 @@
 eigenglm
 ========
 
-A GLM with an underlying C++ implementation using the Eigen library. The C++ implementation is wrapped in Cython and exposed as a Pyhton class.
+A GLM with an underlying C++ implementation using the Eigen library. The C++ implementation is wrapped in Cython and exposed as a Python class.
 
-Installation
+Running
 ============
 
-Run:  ``ipython setup.py build_ext --inplace``
+Install:  ``ipython setup.py build_ext --inplace``
 
-Demo: ``ipython test/test_eigenglm.py``
+Demo: ``ipython examples/demo.py``
