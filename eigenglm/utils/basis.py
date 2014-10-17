@@ -9,20 +9,21 @@ from eigenglm.utils import fftconv
 def create_basis(prms):
     """ Create a basis for impulse response functions
     """
-    type = prms['type'].lower()
-    if type == 'exp':
-        basis = create_exp_basis(prms)
-    elif type == 'cosine':
+    # type = prms['type'].lower()
+    typ = prms.type.lower()
+    # if type == 'exp':
+    #     basis = create_exp_basis(prms)
+    if typ == 'cosine':
         basis = create_cosine_basis(prms)
-    elif type == 'gaussian':
-        basis = create_gaussian_basis(prms)
-    elif type == 'identity' or type == 'eye':
-        basis = create_identity_basis(prms)
-    elif type == 'file':
-        if os.path.exists(prms["fname"]):
-            basis = load_basis_from_file(prms['fname'])
+    # elif type == 'gaussian':
+    #     basis = create_gaussian_basis(prms)
+    # elif type == 'identity' or type == 'eye':
+    #     basis = create_identity_basis(prms)
+    # elif type == 'file':
+    #     if os.path.exists(prms["fname"]):
+    #         basis = load_basis_from_file(prms['fname'])
     else:
-        raise Exception("Unrecognized basis type: %s", type)
+        raise Exception("Unrecognized basis type: %s", typ)
     return basis
 
 def load_basis_from_file(prms):
@@ -65,9 +66,10 @@ def create_cosine_basis(prms):
     #        'orth' : False,
     #        'norm' : True}
     #prms.update(kwargs)
-    n_pts = 100             # Number of points at which to evaluate the basis
-    n_cos = prms['n_cos']   # Number of cosine basis functions
-    n_eye = prms['n_eye']   # Number of identity basis functions
+    n_pts = prms.L             # Number of points at which to evaluate the basis
+    n_eye = prms.n_eye         # Number of identity basis functions
+    n_cos = prms.n_bas         # Number of cosine basis functions
+
     n_bas = n_eye + n_cos
     basis = np.zeros((n_pts,n_bas))
     
@@ -77,8 +79,8 @@ def create_cosine_basis(prms):
     # The remaining basis elements are raised cosine functions with peaks
     # logarithmically warped between [n_eye*dt:dt_max].
     
-    a = prms['a']                       # Scaling in log time
-    b = prms['b']                       # Offset in log time
+    a = prms.a                          # Scaling in log time
+    b = prms.b                          # Offset in log time
     nlin = lambda t: np.log(a*t+b)      # Nonlinearity
     u_ir = nlin(np.arange(n_pts))       # Time in log time
     ctrs = u_ir[np.floor(np.linspace(n_eye,(n_pts/2.0),n_cos)).astype(np.int)]
@@ -94,9 +96,9 @@ def create_cosine_basis(prms):
     
     
     # Orthonormalize basis (this may decrease the number of effective basis vectors)
-    if prms['orth']: 
+    if prms.orth:
         basis = scipy.linalg.orth(basis)
-    if prms['norm']:
+    if prms.norm:
         # We can only normalize nonnegative bases
         if np.any(basis<0):
             raise Exception("We can only normalize nonnegative impulse responses!")
