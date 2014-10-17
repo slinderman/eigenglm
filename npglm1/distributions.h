@@ -10,6 +10,7 @@
 #include <math.h>
 #include "nptypes.h"
 
+inline int sign(double x) { return (x < 0.0 ? -1 : 1); }
 
 using namespace Eigen;
 using namespace nptypes;
@@ -154,8 +155,8 @@ public:
     double logp(MatrixXd x)
     {
         // sum_d (alpha_d -1)*log(abs(x_d)) - sum(abs(x_d))
-        return ((alpha.array() - 1.) * x.array().abs().log()).sum() -
-               x.array().abs().sum();
+        return ((alpha.array() - 1.) * x.array().abs().log()).sum()
+               - x.array().abs().sum();
     }
 
     double logp(double* x_buffer)
@@ -207,21 +208,48 @@ public:
         return p;
     }
 
-    VectorXd grad_dirichlet(VectorXd x)
+    void as_dirichlet(double* g_buffer, double* w_buffer)
+    {
+        NPVector<double> g_np(g_buffer, D);
+        NPVector<double> w_np(w_buffer, D);
+        VectorXd g = g_np;
+        VectorXd w = Dirichlet::as_dirichlet(g);
+        w_np = w;
+    }
+
+    MatrixXd grad_dirichlet(VectorXd g)
     {
         // w_d = |g_d| / \sum_{d'} |g_d'|
-        // d_wd/d_gd = sign(g_d) * sum_{d'\neq d} |g_d'|
-        // MatrixXd g(x.rows(), x.cols());
-        VectorXd g(D);
-        double Z = x.array().abs().sum();
+        // d_wd/d_gd = sign(g_d) * sum_{d'\neq d} |g_d'| / Z**2
 
-        for (int d=0; d<D; d++)
+        // d_wd/d_gd' = -|g|*sign(g_d') / Z**2
+        MatrixXd dwdg(D,D);
+        double Z = g.array().abs().sum();
+
+        for (int d1=0; d1<D; d1++)
         {
-            int sign = x(d) < 0 ? -1 : 1;
-//            int sign = -1 + 2 * (x(d) > 0);
-            g(d) = sign * (Z - fabs(x(d))) / (Z*Z);
+            for (int d2=0; d2<D; d2++)
+            {
+                if (d1==d2)
+                {
+                    dwdg(d1,d2) = sign(g(d1)) * (Z - fabs(g(d1))) / (Z*Z);
+                }
+                else
+                {
+                    dwdg(d1,d2) = - fabs(g(d1)) * sign(g(d2)) / (Z*Z);
+                }
+            }
         }
-        return g;
+        return dwdg;
+    }
+
+    void dw_dg(double* g_buffer, double* dwdg_buffer)
+    {
+        NPVector<double> g_np(g_buffer, D);
+        NPMatrix<double> dwdg_np(dwdg_buffer, D, D);
+        VectorXd g = g_np;
+        MatrixXd dwdg = Dirichlet::grad_dirichlet(g);
+        dwdg_np = dwdg;
     }
 };
 

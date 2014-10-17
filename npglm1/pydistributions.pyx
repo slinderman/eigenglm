@@ -17,6 +17,8 @@ cdef extern from "distributions.h":
         Dirichlet(int) except +
         double logp(double*)
         void grad(double*, double*)
+        void as_dirichlet(double*, double*)
+        void dw_dg(double*, double*)
 
 cdef class PyDiagonalGaussian:
     cdef DiagonalGuassian *thisptr
@@ -60,3 +62,15 @@ cdef class PyDirichlet:
         cdef double[::1] dx = np.zeros(self.D)
         self.thisptr.grad(&x[0], &dx[0])
         return np.asarray(dx).reshape(self.D)
+
+    def as_dirichlet(self, double[::1] x):
+        assert x.size == self.D
+        cdef double[::1] dx = np.zeros(self.D)
+        self.thisptr.as_dirichlet(&x[0], &dx[0])
+        return np.asarray(dx).reshape(self.D)
+
+    def dw_dg(self, double[::1] x):
+        assert x.size == self.D
+        cdef double[:,::1] dx = np.zeros((self.D, self.D))
+        self.thisptr.dw_dg(&x[0], &dx[0,0])
+        return np.asarray(dx).reshape((self.D, self.D))
