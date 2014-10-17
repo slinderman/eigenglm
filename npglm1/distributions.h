@@ -217,7 +217,7 @@ public:
         w_np = w;
     }
 
-    MatrixXd grad_dirichlet(VectorXd g)
+    MatrixXd dw_dg(VectorXd g)
     {
         // w_d = |g_d| / \sum_{d'} |g_d'|
         // d_wd/d_gd = sign(g_d) * sum_{d'\neq d} |g_d'| / Z**2
