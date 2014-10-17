@@ -2,7 +2,7 @@
 #include <Eigen/Dense>
 #include <vector>
 
-#include "glm.h"
+#include "eigenglm.h"
 
 using namespace Eigen;
 using namespace std;

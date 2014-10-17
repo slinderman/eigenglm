@@ -3,7 +3,7 @@ import os
 import numpy as np
 import scipy.linalg
 
-import fftconv
+from eigenglm.utils import fftconv
 
 
 def create_basis(prms):

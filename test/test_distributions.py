@@ -1,4 +1,4 @@
-import pydistributions as pd
+import eigenglm.pydistributions as pd
 import numpy as np
 
 dg = pd.PyDiagonalGaussian()

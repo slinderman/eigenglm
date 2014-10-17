@@ -1,10 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import pyeigenglm as pe
+import eigenglm.cpp.pyeigenglm as pe
+from eigenglm.utils.datahelper import *
+from eigenglm.utils.basis import create_basis, convolve_with_basis
 
-from datahelper import *
-from basis import create_basis, convolve_with_basis
 
 def create_test_data():
     # Create M spike trains
@@ -38,7 +38,7 @@ def convert_data_to_spiketrain(datas, n_post, D_imp=5, dt_max=0.3):
     M = len(datas)
 
     # Initialize a basis
-    from basis import create_basis
+    from eigenglm.utils.basis import create_basis
     basis_params = \
     {
         'type' : 'cosine',

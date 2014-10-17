@@ -248,7 +248,7 @@ public:
         NPVector<double> g_np(g_buffer, D);
         NPMatrix<double> dwdg_np(dwdg_buffer, D, D);
         VectorXd g = g_np;
-        MatrixXd dwdg = Dirichlet::grad_dirichlet(g);
+        MatrixXd dwdg = Dirichlet::dw_dg(g);
         dwdg_np = dwdg;
     }
 };

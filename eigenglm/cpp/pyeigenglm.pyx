@@ -1,5 +1,5 @@
 # distutils: language = c++
-# distutils: sources = glm.cpp impulse.cpp
+# distutils: sources = eigenglm/cpp/eigenglm.cpp eigenglm/cpp/impulse.cpp
 # distutils: libraries = stdc++
 # distutils: extra_compile_args = -std=c++11
 
@@ -8,8 +8,8 @@ cimport numpy as np
 
 from libcpp.vector cimport vector
 
-# Import C++ classes from glm.h
-cdef extern from "glm.h":
+# Import C++ classes from eigenglm.h
+cdef extern from "eigenglm.h":
     # Spike train class encapsulates the observed datasets
     cdef cppclass SpikeTrain:
         SpikeTrain(int, int, double, double*, int, vector[double*]) except +
