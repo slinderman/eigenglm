@@ -86,6 +86,7 @@ class _GLM(object):
 
 
 
+
 ##
 #  Standard GLM implementation
 #
@@ -140,6 +141,30 @@ class StandardGLM(_GLM):
 
     def resample(self):
         self.glm.resample()
+
+    # Properties for the GLM state
+    def impulse_response(self, dt, dt_max):
+        # Get the L x B basis
+        basis = self.impulse_basis.interpolate_basis(dt, dt_max)
+        # The N x B weights
+        weights = self.glm.get_w_ir()
+        return np.dot(weights, basis.T)
+
+    @property
+    def w_ir(self):
+        return self.glm.get_w_ir()
+
+    @property
+    def An(self):
+        # Return the n-th column of A
+        return self.glm.get_A()
+
+    @property
+    def Wn(self):
+        # Return the n-th column of W
+        return self.glm.get_W()
+
+
 
 class NormalizedGLM(_GLM):
     def __init__(self, n, N, params):
@@ -325,3 +350,30 @@ class NormalizedGLM(_GLM):
 
         # Now sample the weights
         self.collapsed_sample_AW()
+
+    # Properties for the GLM state
+    def impulse_response(self, dt, dt_max):
+        # Get the L x B basis
+        ibasis = self.impulse_basis.interpolate_basis(dt, dt_max)
+        # The N x B weights
+        weights = self.glm.get_w_ir()
+        return np.dot(weights, ibasis.T)
+
+    @property
+    def bias(self):
+        return self.glm.get_bias()
+
+    @property
+    def w_ir(self):
+        return self.glm.get_w_ir()
+
+    @property
+    def An(self):
+        # Return the n-th column of A
+        return self.glm.get_A()
+
+    @property
+    def Wn(self):
+        # Return the n-th column of W
+        return self.glm.get_W()
+

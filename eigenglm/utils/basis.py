@@ -15,6 +15,23 @@ class Basis:
         self.params = prms
         self.basis = create_basis(prms)
 
+    def interpolate_basis(self, dt, dt_max):
+        # Interpolate basis at the resolution of the data
+        D_imp = self.params.D
+        L = self.params.L
+        t_int = np.arange(0.0, dt_max, step=dt)
+        t_bas = np.linspace(0.0, dt_max, L)
+
+        ibasis = np.zeros((len(t_int), D_imp))
+        for b in np.arange(D_imp):
+            ibasis[:,b] = np.interp(t_int, t_bas, self.basis[:,b])
+
+        # Normalize so that the interpolated basis has volume 1
+        if self.params.norm:
+            ibasis /=  np.trapz(ibasis,t_int,axis=0)
+
+        return ibasis
+
     def convolve_with_basis(self, S, dt, dt_max):
         """
         Convolve an input matrix S (e.g. a spike train or a stimulus matrix)
@@ -26,15 +43,9 @@ class Basis:
         """
         T, N = S.shape
         D_imp = self.params.D
-        L = self.params.L
 
-        # Interpolate basis at the resolution of the data
-        Lt_int = dt_max // dt
-        t_int = np.linspace(0,1, Lt_int)
-        t_bas = np.linspace(0,1,L)
-        ibasis = np.zeros((len(t_int), D_imp))
-        for b in np.arange(D_imp):
-            ibasis[:,b] = np.interp(t_int, t_bas, self.basis[:,b])
+        # Interpolate the basis at the resolution of the data
+        ibasis = self.interpolate_basis(dt, dt_max)
 
         # Filter the spike train
         filtered_S = []
@@ -148,6 +159,7 @@ def create_cosine_basis(prms):
         # We can only normalize nonnegative bases
         if np.any(basis<0):
             raise Exception("We can only normalize nonnegative impulse responses!")
+
         # Normalize such that \int_0^1 b(t) dt = 1
         basis = basis / np.tile(np.sum(basis,axis=0), [n_pts,1]) / (1.0/n_pts)
     

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from eigenglm import StandardGLM, StandardGLMParameters
-from eigenglm import NormalizedGLM, NormalizedGLMParameters
+from eigenglm import NormalizedGLMPopulation, NormalizedGLMParameters, NormalizedGLMPopulationParameters
 
 # Make fake data
 def create_test_data(N, T, dt=0.001):
@@ -20,19 +20,27 @@ def run():
 
     # Make a parameters object that we can modify
     # prms = StandardGLMParameters()
-    prms = NormalizedGLMParameters()
+    # prms = NormalizedGLMParameters()
+    prms = NormalizedGLMPopulationParameters(N)
     # E.g. change the number of basis elements
-    prms.impulse.basis.n_bas = 5
+    prms.glms[0].impulse.basis.n_bas = 5
+    prms.glms[1].impulse.basis.n_bas = 5
 
     # Make the GLM object
     # glm = StandardGLM(0, N, prms)
-    glm = NormalizedGLM(0, N, prms)
+    # glm = NormalizedGLM(0, N, prms)
+    population = NormalizedGLMPopulation(N, prms)
 
+    # Simulate some data
+    T = 60
+    dt = 0.001
+    data = population.simulate(T, dt)
+    population.add_data(data)
     # Make some fake data
-    T = 60000
-    M = 1
-    for m in range(M):
-        glm.add_data(create_test_data(N, T))
+    # T = 60000
+    # M = 1
+    # for m in range(M):
+    #     glm.add_data(create_test_data(N, T))
 
     # Run some MCMC
     N_iters = 1000
@@ -40,8 +48,8 @@ def run():
     intvl = 25
     start = time.time()
     for i in range(N_iters):
-        glm.resample()
-        ll = glm.log_likelihood()
+        population.resample()
+        ll = population.log_likelihood()
 
         if i % intvl == 0:
             stop = time.time()

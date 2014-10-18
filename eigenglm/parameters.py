@@ -50,3 +50,20 @@ class NormalizedGLMParameters:
     impulse.basis.norm = True
     impulse.basis.orth = False
 
+class StandardGLMPopulationParameters:
+    def __init__(self, N):
+        # TODO: Create latent variable parameters
+        # TODO: Create network parameters
+
+        self.glms = []
+        for n in range(N):
+            self.glms.append(NormalizedGLMParameters())
+
+class NormalizedGLMPopulationParameters:
+    def __init__(self, N):
+        # TODO: Create latent variable parameters
+        # TODO: Create network parameters
+
+        self.glms = []
+        for n in range(N):
+            self.glms.append(NormalizedGLMParameters())
