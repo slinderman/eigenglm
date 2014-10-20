@@ -57,7 +57,7 @@ class StandardGLMPopulationParameters:
 
         self.glms = []
         for n in range(N):
-            self.glms.append(NormalizedGLMParameters())
+            self.glms.append(StandardGLMParameters())
 
 class NormalizedGLMPopulationParameters:
     def __init__(self, N):

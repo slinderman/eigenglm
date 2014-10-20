@@ -228,11 +228,11 @@ class Population(object):
 
 class StandardGLMPopulation(Population):
     def __init__(self, N, prms):
-        super(StandardGLMPopulation, self).__init__(N)
+        super(StandardGLMPopulation, self).__init__(N, prms)
 
         # Initialize the GLMs
         for n in range(N):
-            self.glms.append(StandardGLM(n, N, prms))
+            self.glms.append(StandardGLM(n, N, prms.glms[n]))
 
 class NormalizedGLMPopulation(Population):
     def __init__(self, N, prms):

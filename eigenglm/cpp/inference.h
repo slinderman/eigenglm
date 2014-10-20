@@ -48,6 +48,8 @@ public:
         max_step_sz = 1.0;
     }
 
+    virtual ~AdaptiveHmcSampler() {}
+
     // Base classes must override these functions
     virtual double logp(MatrixXd x) = 0;
     virtual MatrixXd grad(MatrixXd x) = 0;

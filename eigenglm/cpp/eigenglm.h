@@ -85,7 +85,6 @@ class BiasCurrent : public Component
 public:
     double I_bias;
 
-    BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, double sigma);
     BiasCurrent(Random* random, DiagonalGaussian* prior);
     ~BiasCurrent();
 
@@ -134,8 +133,8 @@ public:
     vector<VectorXd> w_ir;
 
     // Constructor
-    LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng);
     LinearImpulseCurrent(int N, int D_imp, Random* random, DiagonalGaussian* prior);
+    ~LinearImpulseCurrent();
 
     // Getters and setters
     void set_glm(Glm* glm) { this->glm = glm; }
@@ -184,8 +183,8 @@ public:
     vector<VectorXd> w_ir;
 
     // Constructor
-    DirichletImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng);
     DirichletImpulseCurrent(int N, int D_imp, Random* random, Dirichlet* prior);
+    ~DirichletImpulseCurrent();
 
     // Getters and setters
     void set_glm(Glm* glm) { this->glm = glm; }
@@ -237,7 +236,6 @@ public:
 class ConstantNetworkColumn : public NetworkColumn
 {
 public:
-    ConstantNetworkColumn(Glm* glm);
     ConstantNetworkColumn(int N);
     double log_probability() { return 0.0; }
     void coord_descent_step(double momentum) {}
@@ -253,12 +251,6 @@ class GaussianNetworkColumn : public NetworkColumn
     IndependentBernoulli* A_prior;
 
 public:
-    GaussianNetworkColumn(Glm* glm, std::default_random_engine rng,
-                          double pA, double pA_self,
-                          double mu, double sigma,
-                          double mu_self, double sigma_self
-                          );
-
     GaussianNetworkColumn(Random* random,
                           DiagonalGaussian* W_prior,
                           IndependentBernoulli* A_prior
@@ -333,8 +325,6 @@ private:
 
 public:
     // Constructor
-    StandardGlm(int n, int N, int D_imp);
-    StandardGlm(int n, int N, int D_imp, int seed);
     StandardGlm(int n, int N,
                 Random* random,
                 BiasCurrent* bias,
@@ -343,22 +333,14 @@ public:
                 ConstantNetworkColumn* network);
     ~StandardGlm() {}
 
-    // Getters
-    BiasCurrent* get_bias_component() { return bias; }
-    LinearImpulseCurrent* get_impulse_component() { return static_cast<LinearImpulseCurrent*>(impulse); }
-    ConstantNetworkColumn* get_network_component() {return static_cast<ConstantNetworkColumn*>(network); }
-
 };
 
 class NormalizedGlm : public Glm
 {
 private:
-    void initialize(int n, int N, int D_imp, int seed);
 
 public:
     // Constructor
-    NormalizedGlm(int n, int N, int D_imp);
-    NormalizedGlm(int n, int N, int D_imp, int seed);
     NormalizedGlm(int n, int N,
                   Random* random,
                   BiasCurrent* bias,
@@ -367,10 +349,6 @@ public:
                   GaussianNetworkColumn* network);
     ~NormalizedGlm() {}
 
-    // Getters
-    BiasCurrent* get_bias_component() { return bias; }
-    DirichletImpulseCurrent* get_impulse_component() { return static_cast<DirichletImpulseCurrent*>(impulse); }
-    GaussianNetworkColumn* get_network_component() {return static_cast<GaussianNetworkColumn*>(network); }
 };
 
 

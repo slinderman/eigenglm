@@ -1,7 +1,7 @@
 # distutils: language = c++
 # distutils: sources = eigenglm/cpp/eigenglm.cpp eigenglm/cpp/impulse.cpp
 # distutils: libraries = stdc++
-# distutils: extra_compile_args = -std=c++11 -O3
+# distutils: extra_compile_args = -std=c++11
 
 import numpy as np
 cimport numpy as np
@@ -41,9 +41,12 @@ cdef extern from "eigenglm.h":
     # Constant Network class
     cdef cppclass ConstantNetworkColumn:
         ConstantNetworkColumn(int) except +
+        void get_A(double* A_buffer)
+        void get_W(double* W_buffer)
 
     # Gaussian network class
     cdef cppclass GaussianNetworkColumn:
+        GaussianNetworkColumn(Random*, DiagonalGaussian*, IndependentBernoulli*)
         void get_A(double* A_buffer)
         void get_W(double* W_buffer)
         void set_A(int n_pre, double a)
@@ -55,7 +58,6 @@ cdef extern from "eigenglm.h":
 
     # Main GLM class
     cdef cppclass StandardGlm:
-        StandardGlm(int, int, int) except +
         StandardGlm(int, int, Random*, BiasCurrent*, LinearImpulseCurrent*, SmoothRectLinearLink*, ConstantNetworkColumn*) except +
         void add_spike_train(SpikeTrain *s)
 
@@ -73,7 +75,7 @@ cdef extern from "eigenglm.h":
 
     # Normalized GLM class
     cdef cppclass NormalizedGlm:
-        NormalizedGlm(int, int, int) except +
+        NormalizedGlm(int, int, Random*, BiasCurrent*, DirichletImpulseCurrent*, SmoothRectLinearLink*, GaussianNetworkColumn*) except +
         void add_spike_train(SpikeTrain *s)
 
         # Getters
@@ -133,23 +135,121 @@ cdef class PyBiasCurrent:
     def __dealloc__(self):
         del self.thisptr
 
+    def get_bias(self):
+        return self.thisptr.get_bias()
+
 cdef class PyLinearImpulseCurrent:
     cdef LinearImpulseCurrent *thisptr
+    cdef public int N
+    cdef public int D_imp
 
     def __cinit__(self, int N, int D_imp, PyRandom random, PyDiagonalGaussian prior):
+        self.N = N
+        self.D_imp = D_imp
         self.thisptr = new LinearImpulseCurrent(N, D_imp, random.thisptr, prior.thisptr)
 
     def __dealloc__(self):
         del self.thisptr
 
-cdef class PyConstantNetworkColumn:
-    cdef ConstantNetworkColumn *thisptr
+    def get_w_ir(self):
+        cdef double[:,::1] w = np.zeros((self.N, self.D_imp))
+        self.thisptr.get_w(&w[0,0])
+        return np.asarray(w).reshape((self.N, self.D_imp))
 
-    def __cinit__(self, int N):
-        self.thisptr = new ConstantNetworkColumn(N)
+    def set_w_ir(self, double[:,::1] w):
+        assert w.shape[0] == self.N and w.shape[1] == self.D_imp, "w is not the correct shape!"
+        self.thisptr.set_w(&w[0,0])
+
+    def get_dll_dw(self, PySpikeTrain st, int n):
+        cdef double[::1] dw = np.zeros(self.D_imp)
+        self.thisptr.d_ll_d_w(st.thisptr, n, &dw[0])
+        return np.asarray(dw)
+
+
+
+cdef class PyDirichletImpulseCurrent:
+    cdef DirichletImpulseCurrent *thisptr
+    cdef public int N
+    cdef public int D_imp
+
+    def __cinit__(self, int N, int D_imp, PyRandom random, PyDirichlet prior):
+        self.N = N
+        self.D_imp = D_imp
+        self.thisptr = new DirichletImpulseCurrent(self.N, self.D_imp, random.thisptr, prior.thisptr)
 
     def __dealloc__(self):
         del self.thisptr
+
+    def get_w_ir(self):
+        cdef double[:,::1] w = np.zeros((self.N, self.D_imp))
+        self.thisptr.get_w(&w[0,0])
+        return np.asarray(w).reshape((self.N, self.D_imp))
+
+    def get_g_ir(self):
+        cdef double[:,::1] g = np.zeros((self.N, self.D_imp))
+        self.thisptr.get_g(&g[0,0])
+        return np.asarray(g).reshape((self.N, self.D_imp))
+
+    def set_g_ir(self, double[:,::1] g):
+        assert g.shape[0] == self.N and g.shape[1] == self.D_imp, "w is not the correct shape!"
+        self.thisptr.set_g(&g[0,0])
+
+    def get_dll_dg(self, PySpikeTrain st, int n):
+        cdef double[::1] dg = np.zeros(self.D_imp)
+        self.thisptr.d_ll_d_g(st.thisptr, n, &dg[0])
+        return np.asarray(dg)
+
+
+cdef class PyConstantNetworkColumn:
+    cdef ConstantNetworkColumn *thisptr
+    cdef public int N
+
+    def __cinit__(self, int N):
+        self.thisptr = new ConstantNetworkColumn(N)
+        self.N = N
+
+    def __dealloc__(self):
+        del self.thisptr
+
+    def get_A(self):
+        cdef double[::1] A = np.zeros(self.N)
+        self.thisptr.get_A(&A[0])
+        return np.asarray(A)
+
+    def get_W(self):
+        cdef double[::1] W = np.zeros(self.N)
+        self.thisptr.get_W(&W[0])
+        return np.asarray(W)
+
+cdef class PyGaussianNetworkColumn:
+    cdef GaussianNetworkColumn *thisptr
+    cdef public int N
+
+    def __cinit__(self, int N,
+                  PyRandom random,
+                  PyDiagonalGaussian W_prior,
+                  PyIndependentBernoulli A_prior):
+        self.N =  N
+        self.thisptr = new GaussianNetworkColumn(random.thisptr, W_prior.thisptr, A_prior.thisptr)
+
+    def __dealloc__(self):
+        del self.thisptr
+
+    def get_A(self):
+        cdef double[::1] A = np.zeros(self.N)
+        self.thisptr.get_A(&A[0])
+        return np.asarray(A)
+
+    def get_W(self):
+        cdef double[::1] W = np.zeros(self.N)
+        self.thisptr.get_W(&W[0])
+        return np.asarray(W)
+
+    def set_A(self, int n_pre, double a):
+        self.thisptr.set_A(n_pre, a)
+
+    def set_W(self, int n_pre, double w):
+        self.thisptr.set_W(n_pre, w)
 
 cdef class PySmoothRectLinearLink:
     cdef SmoothRectLinearLink *thisptr
@@ -166,12 +266,6 @@ cdef class PyStandardGlm:
     cdef public int n
     cdef public int N
     cdef public int D_imp
-
-    def __cinit__(self, int n, int N, int D_imp):
-        self.thisptr = new StandardGlm(n, N, D_imp)
-        self.n = n
-        self.N = N
-        self.D_imp = D_imp
 
     def __cinit__(self, int n, int N,
                   PyRandom random,
@@ -193,23 +287,6 @@ cdef class PyStandardGlm:
 
     def add_spike_train(self, PySpikeTrain st):
         self.thisptr.add_spike_train(st.thisptr)
-
-    def get_bias(self):
-        return self.thisptr.get_bias_component().get_bias()
-
-    def get_w_ir(self):
-        cdef double[:,::1] w = np.zeros((self.N, self.D_imp))
-        self.thisptr.get_impulse_component().get_w(&w[0,0])
-        return np.asarray(w).reshape((self.N, self.D_imp))
-
-    def set_w_ir(self, double[:,::1] w):
-        assert w.shape[0] == self.N and w.shape[1] == self.D_imp, "w is not the correct shape!"
-        self.thisptr.get_impulse_component().set_w(&w[0,0])
-
-    def get_dll_dw(self, PySpikeTrain st, int n):
-        cdef double[::1] dw = np.zeros(self.D_imp)
-        self.thisptr.get_impulse_component().d_ll_d_w(st.thisptr, n, &dw[0])
-        return np.asarray(dw)
 
     def log_prior(self):
         return self.thisptr.log_prior()
@@ -239,11 +316,20 @@ cdef class PyNormalizedGlm:
     cdef public int N
     cdef public int D_imp
 
-    def __cinit__(self, int n, int N, int D_imp):
-        self.thisptr = new NormalizedGlm(n, N, D_imp)
+    def __cinit__(self, int n, int N,
+                  PyRandom random,
+                  PyBiasCurrent bias,
+                  PyDirichletImpulseCurrent impulse,
+                  PySmoothRectLinearLink nlin,
+                  PyGaussianNetworkColumn network):
+        self.thisptr = new NormalizedGlm(n, N,
+                                       random.thisptr,
+                                       bias.thisptr,
+                                       impulse.thisptr,
+                                       nlin.thisptr,
+                                       network.thisptr)
         self.n = n
         self.N = N
-        self.D_imp = D_imp
 
     def __dealloc__(self):
         del self.thisptr
@@ -251,43 +337,6 @@ cdef class PyNormalizedGlm:
     def add_spike_train(self, PySpikeTrain st):
         self.thisptr.add_spike_train(st.thisptr)
 
-    def get_bias(self):
-        return self.thisptr.get_bias_component().get_bias()
-
-    def get_w_ir(self):
-        cdef double[:,::1] w = np.zeros((self.N, self.D_imp))
-        self.thisptr.get_impulse_component().get_w(&w[0,0])
-        return np.asarray(w).reshape((self.N, self.D_imp))
-
-    def get_g_ir(self):
-        cdef double[:,::1] g = np.zeros((self.N, self.D_imp))
-        self.thisptr.get_impulse_component().get_g(&g[0,0])
-        return np.asarray(g).reshape((self.N, self.D_imp))
-
-    def set_g_ir(self, double[:,::1] g):
-        assert g.shape[0] == self.N and g.shape[1] == self.D_imp, "w is not the correct shape!"
-        self.thisptr.get_impulse_component().set_g(&g[0,0])
-
-    def get_A(self):
-        cdef double[::1] A = np.zeros(self.N)
-        self.thisptr.get_network_component().get_A(&A[0])
-        return np.asarray(A)
-
-    def get_W(self):
-        cdef double[::1] W = np.zeros(self.N)
-        self.thisptr.get_network_component().get_W(&W[0])
-        return np.asarray(W)
-
-    def set_A(self, int n_pre, double a):
-        self.thisptr.get_network_component().set_A(n_pre, a)
-
-    def set_W(self, int n_pre, double w):
-        self.thisptr.get_network_component().set_W(n_pre, w)
-
-    def get_dll_dg(self, PySpikeTrain st, int n):
-        cdef double[::1] dg = np.zeros(self.D_imp)
-        self.thisptr.get_impulse_component().d_ll_d_g(st.thisptr, n, &dg[0])
-        return np.asarray(dg)
 
     def log_prior(self):
         return self.thisptr.log_prior()

@@ -48,18 +48,6 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vec
 /**
  *  Bias current.
  */
-BiasCurrent::BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, double sigma)
-{
-    glm = glm;
-
-    // Create a Gaussian prior
-    prior = new DiagonalGaussian(mu, sigma, rng);
-    I_bias = prior->sample()(0);
-
-    // Initialize the sampler. The number of steps is set in glm.h
-    sampler = new BiasHmcSampler(this, rng);
-}
-
 BiasCurrent::BiasCurrent(Random* random, DiagonalGaussian* prior)
 {
     // Initialize the bias
@@ -70,10 +58,7 @@ BiasCurrent::BiasCurrent(Random* random, DiagonalGaussian* prior)
     sampler = new BiasHmcSampler(this, random->rng);
 }
 
-BiasCurrent::~BiasCurrent()
-{
-    delete prior;
-}
+BiasCurrent::~BiasCurrent() {}
 
 double BiasCurrent::log_probability()
 {
@@ -207,54 +192,11 @@ void NetworkColumn::get_W(double* W_buffer)
     np_W = W;
 }
 
-ConstantNetworkColumn::ConstantNetworkColumn(Glm* glm)
-{
-    this->glm = glm;
-
-    // Initialize a constant
-    A = VectorXd::Ones(glm->N);
-    W = VectorXd::Ones(glm->N);
-}
-
 ConstantNetworkColumn::ConstantNetworkColumn(int N)
 {
     // Initialize a constant
     A = VectorXd::Ones(N);
     W = VectorXd::Ones(N);
-}
-
-GaussianNetworkColumn::GaussianNetworkColumn(Glm* glm,
-                                             std::default_random_engine rng,
-                                             double pA,
-                                             double pA_self,
-                                             double mu,
-                                             double sigma,
-                                             double mu_self,
-                                             double sigma_self)
-{
-    this->glm = glm;
-
-    // Create a Bernoulli prior for A
-    VectorXd rho = VectorXd::Constant(glm->N, pA);
-
-    // Overwrite the self connection probability
-    rho(this->glm->n) = pA_self;
-
-    A_prior = new IndependentBernoulli(rho, rng);
-
-    // Create a Gaussian prior for W
-    VectorXd mu_vec = VectorXd::Constant(glm->N, mu);
-    VectorXd sigma_vec = VectorXd::Constant(glm->N, sigma);
-
-    // Overwrite the self connection prior
-    mu_vec(this->glm->n) = mu_self;
-    sigma_vec(this->glm->n) = sigma_self;
-
-    W_prior = new DiagonalGaussian(mu_vec, sigma_vec, rng);
-
-    // Sample weight and adjacency matrices from the prior
-    A = A_prior->sample();
-    W = W_prior->sample();
 }
 
 GaussianNetworkColumn::GaussianNetworkColumn(Random* random,
@@ -290,13 +232,7 @@ void GaussianNetworkColumn::set_W(int n_pre, double w)
 /**
  *  GLM class
  */
-Glm::~Glm()
-{
-    // Cleanup
-    if (Glm::bias) { delete Glm::bias; }
-    if (Glm::impulse) { delete Glm::impulse; }
-    if (Glm::nlin) { delete Glm::nlin; }
-}
+Glm::~Glm() {}
 
 void Glm::add_spike_train(SpikeTrain *s)
 {
@@ -464,32 +400,6 @@ void Glm::resample()
 /**
  *  Standard GLM implementation
  */
-void StandardGlm::initialize(int n, int N, int D_imp, int seed)
-{
-    this->n = n;
-    this->N = N;
-
-    // Initialize random number generator
-    std::default_random_engine rng(seed);
-
-    // Standard GLM
-    this->bias = new BiasCurrent(this, rng, 1.0, 1.0);
-    this->impulse = new LinearImpulseCurrent(this, N, D_imp, rng);
-    this->nlin = new SmoothRectLinearLink();
-    this->network = new ConstantNetworkColumn(this);
-}
-
-StandardGlm::StandardGlm(int n, int N, int D_imp, int seed)
-{
-    initialize(n, N, D_imp, seed);
-}
-
-StandardGlm::StandardGlm(int n, int N, int D_imp)
-{
-    int seed = time(NULL);
-    initialize(n, N, D_imp, seed);
-}
-
 StandardGlm::StandardGlm(int n, int N,
                          Random* random,
                          BiasCurrent* bias,
@@ -515,32 +425,6 @@ StandardGlm::StandardGlm(int n, int N,
 /**
  *  Normalized GLM implementation
  */
-void NormalizedGlm::initialize(int n, int N, int D_imp, int seed)
-{
-    this->n = n;
-    this->N = N;
-
-    // Initialize random number generator
-    std::default_random_engine rng(seed);
-
-    // Normalized GLM
-    this->bias = new BiasCurrent(this, rng, 1.0, 1.0);
-    this->impulse = new DirichletImpulseCurrent(this, N, D_imp, rng);
-    this->nlin = new SmoothRectLinearLink();
-    this->network = new GaussianNetworkColumn(this, rng, 0.5, 0.9, 0.0, 1.0, -1.0, 0.5);
-}
-
-NormalizedGlm::NormalizedGlm(int n, int N, int D_imp, int seed)
-{
-    initialize(n, N, D_imp, seed);
-}
-
-NormalizedGlm::NormalizedGlm(int n, int N, int D_imp)
-{
-    int seed = time(NULL);
-    initialize(n, N, D_imp, seed);
-}
-
 NormalizedGlm::NormalizedGlm(int n, int N,
                              Random* random,
                              BiasCurrent* bias,

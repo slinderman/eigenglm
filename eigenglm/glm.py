@@ -13,6 +13,8 @@ from eigenglm.parameters import *
 from eigenglm.utils.basis import Basis
 import eigenglm.cpp.pyeigenglm as peg
 
+import eigenglm.cpp.pydistributions as pd
+
 class _GLM(object):
     """
     Base class to be subclassed with specific implementations.
@@ -88,8 +90,6 @@ class _GLM(object):
             return ax
 
 
-
-
 ##
 #  Standard GLM implementation
 #
@@ -97,15 +97,34 @@ class StandardGLM(_GLM):
 
     def __init__(self, n, N, params):
         super(StandardGLM, self).__init__(n, N)
-
         assert isinstance(params, StandardGLMParameters)
         self.params = params
 
-        # Create the necessary bases
-        self.impulse_basis = Basis(params.impulse.basis)
+        # Create the random number generator
+        self.random = pd.PyRandom(np.random.randint(np.iinfo(np.int32).max))
 
-        # Create the C++ wrapper object
-        self.glm = peg.PyStandardGlm(n, N, self.params.impulse.basis.D)
+        # Create the bias
+        self.bias_prior = pd.PyDiagonalGaussian(np.array([0.]), np.array([1.]), self.random)
+        self.bias_component = peg.PyBiasCurrent(self.random, self.bias_prior)
+
+        # Create the impulse response
+        D_imp = self.params.impulse.basis.D
+        self.impulse_basis = Basis(params.impulse.basis)
+        self.impulse_prior = pd.PyDiagonalGaussian(np.zeros(D_imp), np.ones(D_imp), self.random)
+        self.impulse_component = peg.PyLinearImpulseCurrent(N, D_imp, self.random, self.impulse_prior)
+
+        # Create the nonlinearity
+        self.nlin = peg.PySmoothRectLinearLink()
+
+        # Create the constant network column
+        self.network_component = peg.PyConstantNetworkColumn(N)
+
+        # Create the GLM
+        self.glm = peg.PyStandardGlm(n, N, self.random,
+                                     self.bias_component,
+                                     self.impulse_component,
+                                     self.nlin,
+                                     self.network_component)
 
     def check_data(self, data):
         super(StandardGLM, self).check_data(data)
@@ -153,37 +172,72 @@ class StandardGLM(_GLM):
         # Get the L x B basis
         basis = self.impulse_basis.interpolate_basis(dt, dt_max)
         # The N x B weights
-        weights = self.glm.get_w_ir()
+        weights = self.impulse_component.get_w_ir()
         return np.dot(weights, basis.T)
 
     @property
+    def bias(self):
+        return self.bias_component.get_bias()
+
+    @property
     def w_ir(self):
-        return self.glm.get_w_ir()
+        return self.impulse_component.get_w_ir()
 
     @property
     def An(self):
         # Return the n-th column of A
-        return self.glm.get_A()
+        return self.network_component.get_A()
 
     @property
     def Wn(self):
         # Return the n-th column of W
-        return self.glm.get_W()
+        return self.network_component.get_W()
 
 
 
 class NormalizedGLM(_GLM):
     def __init__(self, n, N, params):
         super(NormalizedGLM, self).__init__(n, N)
-
         assert isinstance(params, NormalizedGLMParameters)
         self.params = params
 
-        # Create the necessary bases
+        # Create the random number generator
+        self.random = pd.PyRandom(np.random.randint(np.iinfo(np.int32).max))
+
+        # Create the bias
+        self.bias_prior = pd.PyDiagonalGaussian(np.array([0.]), np.array([1.]), self.random)
+        self.bias_component = peg.PyBiasCurrent(self.random, self.bias_prior)
+
+        # Create the impulse response
+        D_imp = self.params.impulse.basis.D
         self.impulse_basis = Basis(params.impulse.basis)
+        self.impulse_prior = pd.PyDirichlet(np.ones(D_imp), self.random)
+        self.impulse_component = peg.PyDirichletImpulseCurrent(N, D_imp, self.random, self.impulse_prior)
+
+        # Create the nonlinearity
+        self.nlin = peg.PySmoothRectLinearLink()
+
+        # Create the constant network column
+        rho = 0.5 * np.ones(N)
+        rho[n] = 0.9
+        self.A_prior = pd.PyIndependentBernoulli(rho, self.random)
+
+        mu = np.zeros(N)
+        mu[n] = -1.0
+        sigma = np.ones(N)
+        sigma[n] = 0.5
+        self.W_prior = pd.PyDiagonalGaussian(mu, sigma, self.random)
+        self.network_component = peg.PyGaussianNetworkColumn(N, self.random, self.W_prior, self.A_prior)
+
+        # Create the GLM
+        self.glm = peg.PyNormalizedGlm(n, N, self.random,
+                                       self.bias_component,
+                                       self.impulse_component,
+                                       self.nlin,
+                                       self.network_component)
 
         # Create the C++ wrapper object
-        self.glm = peg.PyNormalizedGlm(n, N, self.params.impulse.basis.D)
+        # self.glm = peg.PyNormalizedGlm(n, N, self.params.impulse.basis.D)
 
     def check_data(self, data):
         super(NormalizedGLM, self).check_data(data)
@@ -237,8 +291,8 @@ class NormalizedGLM(_GLM):
         sigma_w = np.ones(self.N)
         rho = 0.5 * np.ones(self.N)
 
-        A = self.glm.get_A()
-        W = self.glm.get_W()
+        A = self.An
+        W = self.Wn
 
         for n_pre in range(self.N):
             # print "Sampling A and W for ", n_pre
@@ -248,7 +302,7 @@ class NormalizedGLM(_GLM):
             prior_lp_noA = np.log(1.0-rho[n_pre])
 
             # First approximate the marginal likelihood with an edge
-            self.glm.set_A(n_pre, 1.0)
+            self.network_component.set_A(n_pre, 1.0)
 
             # Approximate G = \int_0^\infty p({s,c} | A, W) p(W_{n,n'}) dW_{n,n'}
             log_L = np.zeros(deg_gauss_hermite)
@@ -256,7 +310,7 @@ class NormalizedGLM(_GLM):
             W_nns = np.sqrt(2) * sigma_w[n_pre] * gauss_hermite_abscissae + mu_w[n_pre]
             for i in np.arange(deg_gauss_hermite):
                 # Set the weight for the incoming connection
-                self.glm.set_W(n_pre, W_nns[i])
+                self.network_component.set_W(n_pre, W_nns[i])
 
                 # Compute the Gauss hermite weight
                 w = gauss_hermite_weights[i]
@@ -264,7 +318,7 @@ class NormalizedGLM(_GLM):
 
                 # Compute the log likelihood
                 log_L[i] = self.glm.log_likelihood()
-                assert self.glm.get_A()[n_pre] == 1
+                assert self.network_component.get_A()[n_pre] == 1
 
                 # Handle NaNs in the GLM log likelihood
                 if np.isnan(log_L[i]):
@@ -286,7 +340,7 @@ class NormalizedGLM(_GLM):
             log_pr_A = prior_lp_A + log_G
 
             # Compute log Pr(A_nn = 0 | {s,c}) = log Pr({s,c} | A_nn = 0) + log Pr(A_nn = 0)
-            self.glm.set_A(n_pre, 0)
+            self.network_component.set_A(n_pre, 0)
             log_pr_noA = prior_lp_noA + self.glm.log_likelihood()
 
             if np.isnan(log_pr_noA):
@@ -295,7 +349,7 @@ class NormalizedGLM(_GLM):
             # Sample A
             try:
                 A[n_pre] = log_sum_exp_sample(np.array([log_pr_noA, log_pr_A]))
-                self.glm.set_A(n_pre, A[n_pre])
+                self.network_component.set_A(n_pre, A[n_pre])
 
                 # DEBUG
                 if np.allclose(rho[n_pre], 1.0) and not A[n_pre]:
@@ -314,7 +368,7 @@ class NormalizedGLM(_GLM):
                 # Sample W from the prior
                 W[n_pre] = mu_w[n_pre] + sigma_w[n_pre] * np.random.randn()
 
-            self.glm.set_W(n_pre, W[n_pre])
+            self.network_component.set_W(n_pre, W[n_pre])
 
 
     def adaptive_rejection_sample_w(self, n_pre, mu_w, sigma_w, ws_init, log_L):
@@ -336,7 +390,7 @@ class NormalizedGLM(_GLM):
             ws = np.atleast_1d(ws)
             lp = np.zeros_like(ws)
             for (i,w) in enumerate(ws):
-                self.glm.set_W(n_pre, w)
+                self.network_component.set_W(n_pre, w)
                 lp[i] = -0.5/sigma_w**2 * (w-mu_w)**2 + \
                         self.glm.log_likelihood() - Z
 
@@ -365,24 +419,24 @@ class NormalizedGLM(_GLM):
         # Get the L x B basis
         ibasis = self.impulse_basis.interpolate_basis(dt, dt_max)
         # The N x B weights
-        weights = self.glm.get_w_ir()
+        weights = self.impulse_component.get_w_ir()
         return np.dot(weights, ibasis.T)
 
     @property
     def bias(self):
-        return self.glm.get_bias()
+        return self.bias_component.get_bias()
 
     @property
     def w_ir(self):
-        return self.glm.get_w_ir()
+        return self.impulse_component.get_w_ir()
 
     @property
     def An(self):
         # Return the n-th column of A
-        return self.glm.get_A()
+        return self.network_component.get_A()
 
     @property
     def Wn(self):
         # Return the n-th column of W
-        return self.glm.get_W()
+        return self.network_component.get_W()
 

@@ -1,8 +1,12 @@
 import time
 import numpy as np
+
+# Set the random seed for reproducability
+np.random.seed(0)
+
 import matplotlib.pyplot as plt
 
-from eigenglm import StandardGLM, StandardGLMParameters
+from eigenglm import StandardGLMPopulation, StandardGLM, StandardGLMParameters, StandardGLMPopulationParameters
 from eigenglm import NormalizedGLMPopulation, NormalizedGLMParameters, NormalizedGLMPopulationParameters
 
 # Make fake data
@@ -21,6 +25,7 @@ def run():
     # Make a parameters object that we can modify
     # prms = StandardGLMParameters()
     # prms = NormalizedGLMParameters()
+    # prms = StandardGLMPopulationParameters(N)
     prms = NormalizedGLMPopulationParameters(N)
     # E.g. change the number of basis elements
     prms.glms[0].impulse.basis.n_bas = 5
@@ -29,6 +34,7 @@ def run():
     # Make the GLM object
     # glm = StandardGLM(0, N, prms)
     # glm = NormalizedGLM(0, N, prms)
+    # population = StandardGLMPopulation(N, prms)
     population = NormalizedGLMPopulation(N, prms)
 
     print "A: ", population.A

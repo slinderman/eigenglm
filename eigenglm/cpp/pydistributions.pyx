@@ -14,12 +14,12 @@ cdef class PyRandom:
         self.thisptr = new Random(seed)
 
 cdef class PyIndependentBernoulli:
-    cdef IndependentBernoulli *thisptr
-    cdef public int D
+    #cdef IndependentBernoulli *thisptr
+    #cdef public int D
 
-    def __cinit__(self):
-        self.thisptr = new IndependentBernoulli()
-        self.D = 1
+    def __cinit__(self, double[::1] rho, PyRandom random):
+        self.D = rho.size
+        self.thisptr = new IndependentBernoulli(&rho[0], self.D, random.thisptr)
 
     def __dealloc__(self):
         del self.thisptr
@@ -32,9 +32,10 @@ cdef class PyDiagonalGaussian:
     #cdef DiagonalGaussian *thisptr
     #cdef public int D
 
-    def __cinit__(self):
-        self.thisptr = new DiagonalGaussian()
-        self.D = 1
+    def __cinit__(self, double[::1] mu, double[::1] sigma, PyRandom random):
+        self.D = mu.size
+        assert sigma.size == self.D, "Mu and sigma must be the same size!"
+        self.thisptr = new DiagonalGaussian(&mu[0], &sigma[0], self.D, random.thisptr)
 
     def __dealloc__(self):
         del self.thisptr
@@ -51,12 +52,12 @@ cdef class PyDiagonalGaussian:
 
 
 cdef class PyDirichlet:
-    cdef public int D
-    cdef Dirichlet *thisptr
+    #cdef public int D
+    #cdef Dirichlet *thisptr
 
-    def __cinit__(self, int D):
-        self.D = D
-        self.thisptr = new Dirichlet(D)
+    def __cinit__(self, double[::1] alpha, PyRandom random):
+        self.D = alpha.size
+        self.thisptr = new Dirichlet(&alpha[0], self.D, random.thisptr)
 
     def __dealloc__(self):
         del self.thisptr
@@ -82,3 +83,8 @@ cdef class PyDirichlet:
         cdef double[:,::1] dx = np.zeros((self.D, self.D))
         self.thisptr.dw_dg(&x[0], &dx[0,0])
         return np.asarray(dx).reshape((self.D, self.D))
+
+    def sample(self):
+        cdef double[::1] s = np.zeros(self.D)
+        self.thisptr.sample(&s[0])
+        return np.asarray(s)

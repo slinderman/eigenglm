@@ -68,22 +68,18 @@ private:
         uniform = std::uniform_real_distribution<double>(0.0,1.0);
     }
 public:
-    IndependentBernoulli()
+    IndependentBernoulli(double* rho_buffer,
+                         int D,
+                         Random* random) :
+                         Distribution(random->rng)
     {
-        rho = VectorXd::Constant(this->D, 0.5);
-        initialize(rho);
-    }
-
-    IndependentBernoulli(VectorXd rho,
-                         std::default_random_engine rng) :
-                         Distribution(rng)
-    {
+        NPVector<double> rho(rho_buffer, D);
         initialize(rho);
     }
 
     IndependentBernoulli(double rho,
-                     std::default_random_engine rng) :
-                     Distribution(rng)
+                         Random* random) :
+                         Distribution(random->rng)
     {
         VectorXd rhov = VectorXd::Constant(1, rho);
         initialize(rhov);
@@ -132,7 +128,6 @@ public:
     void grad(double* x_buffer, double* dx_buffer)
     {
         NPVector<double> dx_np(dx_buffer, D, 1);
-//        dx_np = 0;
     }
 
     MatrixXd sample()
@@ -153,29 +148,32 @@ public:
  */
 class DiagonalGaussian : public Distribution
 {
+protected:
     int D;
     VectorXd mu;
     VectorXd sigma;
     std::normal_distribution<double> normal;
 
-public:
-    DiagonalGaussian()
+    void initialize(VectorXd mu,
+                    VectorXd sigma,
+                    std::default_random_engine rng)
     {
-        this->D = 1;
-        mu = VectorXd::Zero(D);
-        sigma = VectorXd::Ones(D);
+        this->D = mu.size();
+        this->mu = mu;
+        this->sigma = sigma;
         this->normal = std::normal_distribution<double>(0.0, 1.0);
     }
 
-    DiagonalGaussian(VectorXd mu,
-                     VectorXd sigma,
-                     std::default_random_engine rng) :
-                     Distribution(rng)
+public:
+    DiagonalGaussian(double* mu_buffer,
+                     double* sigma_buffer,
+                     int D,
+                     Random* random) :
+                     Distribution(random->rng)
     {
-        this->mu = mu;
-        this->sigma = sigma;
-        this->D = mu.size();
-        this->normal = std::normal_distribution<double>(0.0, 1.0);
+        NPVector<double> mu(mu_buffer, D);
+        NPVector<double> sigma(sigma_buffer, D);
+        initialize(mu, sigma, random->rng);
     }
 
     DiagonalGaussian(double mu,
@@ -183,10 +181,9 @@ public:
                      std::default_random_engine rng) :
                      Distribution(rng)
     {
-        this->mu = VectorXd::Constant(1, mu);
-        this->sigma = VectorXd::Constant(1, sigma);
-        this->D = 1;
-        this->normal = std::normal_distribution<double>(0.0, 1.0);
+        VectorXd mu_vec = VectorXd::Constant(1, mu);
+        VectorXd sigma_vec = VectorXd::Constant(1, sigma);
+        initialize(mu_vec, sigma_vec, rng);
     }
 
     ~DiagonalGaussian() {}
@@ -262,6 +259,27 @@ public:
 };
 
 
+/**
+ *  Scalar Gaussian subclass of diagonal Gaussian
+ */
+//class ScalarGaussian : public DiagonalGaussian
+//{
+//public:
+//    ScalarGaussian(double mu,
+//                   double sigma,
+//                   std::default_random_engine rng) :
+//                   Distribution(rng)
+//    {
+//        VectorXd mu_vec = VectorXd::Constant(1, mu);
+//        VectorXd sigma_vec = VectorXd::Constant(1, sigma);
+//        initialize(mu_vec, sigma_vec, rng);
+//    }
+//
+//    ~ScalarGaussian() {}
+//
+//
+//};
+
 /*
  *  Dirichlet distribution parameterized by gamma r.v.'s. To unconstrain the parameters,
  *  we use real valued r.v.'s and make sure their absolute value to gamma distributed.
@@ -277,23 +295,15 @@ class Dirichlet : public Distribution
     std::vector<std::gamma_distribution<double>> gammas;
 
 public:
-    Dirichlet(int D)
+
+    Dirichlet(double* alpha_buffer,
+              int D,
+              Random* random) :
+              Distribution(random->rng)
     {
         this->D = D;
-        this->alpha = VectorXd::Constant(this->D, 0.1);
-
-        for (int d=0; d < this->D; d++)
-        {
-            this->gammas.push_back(std::gamma_distribution<double>(alpha(d), 1.0));
-        }
-    }
-
-    Dirichlet(VectorXd alpha,
-              std::default_random_engine rng) :
-              Distribution(rng)
-    {
+        NPVector<double> alpha(alpha_buffer, D);
         this->alpha = alpha;
-        this->D = alpha.size();
 
         for (int d=0; d < this->D; d++)
         {
@@ -360,6 +370,12 @@ public:
             x(d) = gammas[d](rng);
         }
         return x;
+    }
+
+    void sample(double* buffer)
+    {
+        NPVector<double> s(buffer, D);
+        s = sample();
     }
 
     VectorXd as_dirichlet(VectorXd x)

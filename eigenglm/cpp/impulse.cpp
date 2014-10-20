@@ -9,28 +9,6 @@ using namespace std;
 /**
  *  Impulse response classes.
  */
-LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng)
-{
-    LinearImpulseCurrent::glm = glm;
-    this->N = N;
-    this->D_imp = D_imp;
-
-    // TODO: Create a Gaussian prior
-    VectorXd mu = VectorXd::Constant(D_imp, 0);
-    VectorXd sigma = VectorXd::Constant(D_imp, 1);
-
-    prior = new DiagonalGaussian(mu, sigma, rng);
-
-    // Initialize impulse response weights.
-    for (int n=0; n < N; n++)
-    {
-        w_ir.push_back(prior->sample());
-    }
-
-    // Initialize the sampler. The number of steps is set in glm.h
-    sampler = new ImpulseHmcSampler(this, rng);
-}
-
 LinearImpulseCurrent::LinearImpulseCurrent(int N, int D_imp, Random* random, DiagonalGaussian* prior)
 {
     this->prior = prior;
@@ -46,6 +24,11 @@ LinearImpulseCurrent::LinearImpulseCurrent(int N, int D_imp, Random* random, Dia
 
     // Initialize the sampler. The number of steps is set in glm.h
     sampler = new ImpulseHmcSampler(this, random->rng);
+}
+
+LinearImpulseCurrent::~LinearImpulseCurrent()
+{
+    if (sampler) { delete sampler; }
 }
 
 VectorXd LinearImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n)
@@ -195,27 +178,6 @@ void LinearImpulseCurrent::resample()
 /**
  *  Dirichlet distributed impulse response coefficients.
  */
-DirichletImpulseCurrent::DirichletImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng)
-{
-    DirichletImpulseCurrent::glm = glm;
-    DirichletImpulseCurrent::N = N;
-    DirichletImpulseCurrent::D_imp = D_imp;
-
-    // TODO: Create a Gaussian prior
-    VectorXd alpha = VectorXd::Constant(D_imp, 10);
-    prior = new Dirichlet(alpha, rng);
-
-    // Initialize impulse response weights.
-    for (int n=0; n < N; n++)
-    {
-        g_ir.push_back(prior->sample());
-        w_ir.push_back(prior->as_dirichlet(g_ir[n]));
-    }
-
-    // Initialize the sampler. The number of steps is set in glm.h
-    sampler = new ImpulseHmcSampler(this, rng);
-}
-
 DirichletImpulseCurrent::DirichletImpulseCurrent(int N, int D_imp, Random* random, Dirichlet* prior)
 {
     this->N = N;
@@ -233,6 +195,10 @@ DirichletImpulseCurrent::DirichletImpulseCurrent(int N, int D_imp, Random* rando
     sampler = new ImpulseHmcSampler(this, random->rng);
 }
 
+DirichletImpulseCurrent::~DirichletImpulseCurrent()
+{
+    if (sampler) { delete sampler; }
+}
 
 VectorXd DirichletImpulseCurrent::d_ll_d_g(SpikeTrain* st, int n)
 {
@@ -267,8 +233,8 @@ MatrixXd DirichletImpulseCurrent::compute_current(SpikeTrain* st)
 void DirichletImpulseCurrent::get_w(double* w_buffer)
 {
     // Copy the impulse response weights into a buffer
-    NPMatrix<double> w(w_buffer, DirichletImpulseCurrent::N, DirichletImpulseCurrent::D_imp);
-    for (int n=0; n<DirichletImpulseCurrent::N; n++)
+    NPMatrix<double> w(w_buffer, N, D_imp);
+    for (int n=0; n<N; n++)
     {
         w.row(n) = w_ir[n];
     }
@@ -277,8 +243,8 @@ void DirichletImpulseCurrent::get_w(double* w_buffer)
 void DirichletImpulseCurrent::get_g(double* g_buffer)
 {
     // Copy the impulse response weights into a buffer
-    NPMatrix<double> g(g_buffer, DirichletImpulseCurrent::N, DirichletImpulseCurrent::D_imp);
-    for (int n=0; n<DirichletImpulseCurrent::N; n++)
+    NPMatrix<double> g(g_buffer, N, D_imp);
+    for (int n=0; n < N; n++)
     {
         g.row(n) = g_ir[n];
     }
@@ -287,8 +253,8 @@ void DirichletImpulseCurrent::get_g(double* g_buffer)
 void DirichletImpulseCurrent::set_g(double* g_buffer)
 {
     // Copy the impulse response weights into a buffer
-    NPMatrix<double> g(g_buffer, DirichletImpulseCurrent::N, DirichletImpulseCurrent::D_imp);
-    for (int n=0; n<DirichletImpulseCurrent::N; n++)
+    NPMatrix<double> g(g_buffer, N, D_imp);
+    for (int n=0; n < N; n++)
     {
         g_ir[n] = g.row(n);
         // Update w accordingly
