@@ -5,6 +5,14 @@
 import numpy as np
 cimport numpy as np
 
+
+# Python wrapper of Random
+cdef class PyRandom:
+    #cdef Random *thisptr
+
+    def __cinit__(self, int seed):
+        self.thisptr = new Random(seed)
+
 cdef class PyIndependentBernoulli:
     cdef IndependentBernoulli *thisptr
     cdef public int D
@@ -21,8 +29,8 @@ cdef class PyIndependentBernoulli:
         return self.thisptr.logp(&x[0])
 
 cdef class PyDiagonalGaussian:
-    cdef DiagonalGaussian *thisptr
-    cdef public int D
+    #cdef DiagonalGaussian *thisptr
+    #cdef public int D
 
     def __cinit__(self):
         self.thisptr = new DiagonalGaussian()

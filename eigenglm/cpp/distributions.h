@@ -15,6 +15,22 @@ inline int sign(double x) { return (x < 0.0 ? -1 : 1); }
 using namespace Eigen;
 using namespace nptypes;
 
+/**
+ *  A silly little wrapper to share the random number generator among components
+ */
+class Random
+{
+public:
+    std::default_random_engine rng;
+
+    Random(int seed=0)
+    {
+        // Initialize random number generator
+        this->rng = std::default_random_engine(seed);
+    }
+};
+
+
 class Distribution
 {
 protected:
@@ -75,6 +91,25 @@ public:
 
     ~IndependentBernoulli() {}
 
+    // Getters and setters
+    void get_rho(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        b = rho;
+    }
+
+    void set_rho(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        rho = b;
+
+        // Update helper variables
+        this->logrho = rho.array().log();
+        this->lognotrho = (1.0-rho.array()).log();
+    }
+
     double logp(MatrixXd x)
     {
         // TODO: input checking?
@@ -129,12 +164,6 @@ public:
         this->D = 1;
         mu = VectorXd::Zero(D);
         sigma = VectorXd::Ones(D);
-
-        // Initialize random number generator
-    //        std::default_random_engine rng;
-    //        Distribution::Distribution(rng);
-    //        this->rng = rng;
-
         this->normal = std::normal_distribution<double>(0.0, 1.0);
     }
 
@@ -161,6 +190,35 @@ public:
     }
 
     ~DiagonalGaussian() {}
+
+    // Getters and setters
+    void get_mu(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        b = mu;
+    }
+
+    void set_mu(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        mu = b;
+    }
+
+    void get_sigma(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        b = sigma;
+    }
+
+    void set_sigma(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        sigma = b;
+    }
 
     double logp(MatrixXd x)
     {
@@ -250,6 +308,21 @@ public:
         // sum_d (alpha_d -1)*log(abs(x_d)) - sum(abs(x_d))
         return ((alpha.array() - 1.) * x.array().abs().log()).sum()
                - x.array().abs().sum();
+    }
+
+    // Getters and setters
+    void get_alpha(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        b = alpha;
+    }
+
+    void set_alpha(double* buffer)
+    {
+        // Copy the parameter into a buffer
+        NPVector<double> b(buffer, D);
+        alpha = b;
     }
 
     double logp(double* x_buffer)

@@ -13,6 +13,9 @@ using namespace Eigen;
 using namespace std;
 using namespace nptypes;
 
+/**
+ *  Class that encapsulates the spike train object and its corresponding data.
+ */
 class SpikeTrain
 {
 private:
@@ -37,6 +40,9 @@ public:
     SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vector<double*> filtered_S_buffers);
 };
 
+/**
+ *  Base class for components of the GLM.
+ */
 class Component
 {
 public:
@@ -56,12 +62,11 @@ public:
 
 // Forward define the GLM class
 class Glm;
-//class BiasCurrent;
 
 class BiasCurrent : public Component
 {
     Distribution* prior;
-    Glm* parent;
+    Glm* glm;
 
     // Nested class for sampling
     class BiasHmcSampler : public AdaptiveHmcSampler
@@ -81,13 +86,18 @@ public:
     double I_bias;
 
     BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, double sigma);
+    BiasCurrent(Random* random, DiagonalGaussian* prior);
     ~BiasCurrent();
 
+    // Getters and setters
+    void set_glm(Glm* glm) { this->glm = glm; }
+    double get_bias() { return I_bias; }
+
+    // Component methods
     double log_probability();
     void coord_descent_step(double momentum);
     void resample();
 
-    double get_bias() { return I_bias; }
 };
 
 class ImpulseCurrent : public Component
@@ -99,7 +109,7 @@ public:
 class LinearImpulseCurrent : public ImpulseCurrent
 {
 private:
-    Distribution* prior;
+    DiagonalGaussian* prior;
     Glm* glm;
     int N, D_imp;
 
@@ -125,8 +135,10 @@ public:
 
     // Constructor
     LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng);
+    LinearImpulseCurrent(int N, int D_imp, Random* random, DiagonalGaussian* prior);
 
-    // Getters
+    // Getters and setters
+    void set_glm(Glm* glm) { this->glm = glm; }
     MatrixXd compute_current(SpikeTrain* st);
     void get_w(double* w_buffer);
     void set_w(double* w_buffer);
@@ -173,8 +185,10 @@ public:
 
     // Constructor
     DirichletImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng);
+    DirichletImpulseCurrent(int N, int D_imp, Random* random, Dirichlet* prior);
 
-    // Getters
+    // Getters and setters
+    void set_glm(Glm* glm) { this->glm = glm; }
     MatrixXd compute_current(SpikeTrain* st);
     void get_w(double* w_buffer);
     void get_g(double* w_buffer);
@@ -224,9 +238,13 @@ class ConstantNetworkColumn : public NetworkColumn
 {
 public:
     ConstantNetworkColumn(Glm* glm);
+    ConstantNetworkColumn(int N);
     double log_probability() { return 0.0; }
     void coord_descent_step(double momentum) {}
     void resample() {}
+
+    // Getters and setters
+    void set_glm(Glm* glm) { this->glm = glm; }
 };
 
 class GaussianNetworkColumn : public NetworkColumn
@@ -241,11 +259,17 @@ public:
                           double mu_self, double sigma_self
                           );
 
+    GaussianNetworkColumn(Random* random,
+                          DiagonalGaussian* W_prior,
+                          IndependentBernoulli* A_prior
+                          );
+
     double log_probability();
     void coord_descent_step(double momentum);
     void resample();
 
     // Getters and setters
+    void set_glm(Glm* glm) { this->glm = glm; }
     void set_A(int n_pre, double a);
     void set_W(int n_pre, double w);
 };
@@ -311,12 +335,19 @@ public:
     // Constructor
     StandardGlm(int n, int N, int D_imp);
     StandardGlm(int n, int N, int D_imp, int seed);
+    StandardGlm(int n, int N,
+                Random* random,
+                BiasCurrent* bias,
+                LinearImpulseCurrent* impulse,
+                SmoothRectLinearLink* nlin,
+                ConstantNetworkColumn* network);
     ~StandardGlm() {}
 
     // Getters
     BiasCurrent* get_bias_component() { return bias; }
     LinearImpulseCurrent* get_impulse_component() { return static_cast<LinearImpulseCurrent*>(impulse); }
     ConstantNetworkColumn* get_network_component() {return static_cast<ConstantNetworkColumn*>(network); }
+
 };
 
 class NormalizedGlm : public Glm
@@ -328,6 +359,12 @@ public:
     // Constructor
     NormalizedGlm(int n, int N, int D_imp);
     NormalizedGlm(int n, int N, int D_imp, int seed);
+    NormalizedGlm(int n, int N,
+                  Random* random,
+                  BiasCurrent* bias,
+                  DirichletImpulseCurrent* impulse,
+                  SmoothRectLinearLink* nlin,
+                  GaussianNetworkColumn* network);
     ~NormalizedGlm() {}
 
     // Getters

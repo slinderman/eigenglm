@@ -50,7 +50,7 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vec
  */
 BiasCurrent::BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, double sigma)
 {
-    parent = glm;
+    glm = glm;
 
     // Create a Gaussian prior
     prior = new DiagonalGaussian(mu, sigma, rng);
@@ -58,6 +58,16 @@ BiasCurrent::BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, do
 
     // Initialize the sampler. The number of steps is set in glm.h
     sampler = new BiasHmcSampler(this, rng);
+}
+
+BiasCurrent::BiasCurrent(Random* random, DiagonalGaussian* prior)
+{
+    // Initialize the bias
+    this->prior = prior;
+    I_bias = prior->sample()(0);
+
+    // Initialize the sampler. The number of steps is set in glm.h
+    sampler = new BiasHmcSampler(this, random->rng);
 }
 
 BiasCurrent::~BiasCurrent()
@@ -82,11 +92,11 @@ void BiasCurrent::coord_descent_step(double momentum)
     double grad = mgrad(0);
 
     // Get the gradient with respect to each spike train
-    for (vector<SpikeTrain*>::iterator s = parent->spike_trains.begin();
-         s != parent->spike_trains.end();
+    for (vector<SpikeTrain*>::iterator s = glm->spike_trains.begin();
+         s != glm->spike_trains.end();
          ++s)
     {
-        grad += parent->d_ll_d_bias(*s);
+        grad += glm->d_ll_d_bias(*s);
     }
 
     // Update bias
@@ -109,7 +119,7 @@ double BiasCurrent::BiasHmcSampler::logp(MatrixXd x)
     // Set the bias
     parent->I_bias = x(0,0);
 
-    return parent->parent->log_probability();
+    return parent->glm->log_probability();
 }
 
 MatrixXd BiasCurrent::BiasHmcSampler::grad(MatrixXd x)
@@ -125,7 +135,7 @@ MatrixXd BiasCurrent::BiasHmcSampler::grad(MatrixXd x)
     // Overwrite grad with the prior gradient
     parent->prior->grad(mI_bias, &grad);
 
-    Glm* glm = parent->parent;
+    Glm* glm = parent->glm;
 
     // Get the gradient with respect to each spike train
     for (vector<SpikeTrain*>::iterator s = glm->spike_trains.begin();
@@ -206,6 +216,13 @@ ConstantNetworkColumn::ConstantNetworkColumn(Glm* glm)
     W = VectorXd::Ones(glm->N);
 }
 
+ConstantNetworkColumn::ConstantNetworkColumn(int N)
+{
+    // Initialize a constant
+    A = VectorXd::Ones(N);
+    W = VectorXd::Ones(N);
+}
+
 GaussianNetworkColumn::GaussianNetworkColumn(Glm* glm,
                                              std::default_random_engine rng,
                                              double pA,
@@ -234,6 +251,18 @@ GaussianNetworkColumn::GaussianNetworkColumn(Glm* glm,
     sigma_vec(this->glm->n) = sigma_self;
 
     W_prior = new DiagonalGaussian(mu_vec, sigma_vec, rng);
+
+    // Sample weight and adjacency matrices from the prior
+    A = A_prior->sample();
+    W = W_prior->sample();
+}
+
+GaussianNetworkColumn::GaussianNetworkColumn(Random* random,
+                                             DiagonalGaussian* W_prior,
+                                             IndependentBernoulli* A_prior)
+{
+    this->W_prior = W_prior;
+    this->A_prior = A_prior;
 
     // Sample weight and adjacency matrices from the prior
     A = A_prior->sample();
@@ -461,6 +490,28 @@ StandardGlm::StandardGlm(int n, int N, int D_imp)
     initialize(n, N, D_imp, seed);
 }
 
+StandardGlm::StandardGlm(int n, int N,
+                         Random* random,
+                         BiasCurrent* bias,
+                         LinearImpulseCurrent* impulse,
+                         SmoothRectLinearLink* nlin,
+                         ConstantNetworkColumn* network)
+{
+    this->n = n;
+    this->N = N;
+
+    // Set the child links
+    this->bias = bias;
+    this->impulse = impulse;
+    this->nlin = nlin;
+    this->network = network;
+
+    // Set the parent links
+    bias->set_glm(this);
+    impulse->set_glm(this);
+
+}
+
 /**
  *  Normalized GLM implementation
  */
@@ -490,4 +541,26 @@ NormalizedGlm::NormalizedGlm(int n, int N, int D_imp)
     initialize(n, N, D_imp, seed);
 }
 
+NormalizedGlm::NormalizedGlm(int n, int N,
+                             Random* random,
+                             BiasCurrent* bias,
+                             DirichletImpulseCurrent* impulse,
+                             SmoothRectLinearLink* nlin,
+                             GaussianNetworkColumn* network)
+{
+    this->n = n;
+    this->N = N;
+
+    // Set the child links
+    this->bias = bias;
+    this->impulse = impulse;
+    this->nlin = nlin;
+    this->network = network;
+
+    // Set the parent links
+    bias->set_glm(this);
+    impulse->set_glm(this);
+    network->set_glm(this);
+
+}
 

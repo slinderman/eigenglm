@@ -12,8 +12,8 @@ using namespace std;
 LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::default_random_engine rng)
 {
     LinearImpulseCurrent::glm = glm;
-    LinearImpulseCurrent::N = N;
-    LinearImpulseCurrent::D_imp = D_imp;
+    this->N = N;
+    this->D_imp = D_imp;
 
     // TODO: Create a Gaussian prior
     VectorXd mu = VectorXd::Constant(D_imp, 0);
@@ -29,6 +29,23 @@ LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::defa
 
     // Initialize the sampler. The number of steps is set in glm.h
     sampler = new ImpulseHmcSampler(this, rng);
+}
+
+LinearImpulseCurrent::LinearImpulseCurrent(int N, int D_imp, Random* random, DiagonalGaussian* prior)
+{
+    this->prior = prior;
+
+    this->N = N;
+    this->D_imp = D_imp;
+
+    // Initialize impulse response weights.
+    for (int n=0; n < N; n++)
+    {
+        w_ir.push_back(prior->sample());
+    }
+
+    // Initialize the sampler. The number of steps is set in glm.h
+    sampler = new ImpulseHmcSampler(this, random->rng);
 }
 
 VectorXd LinearImpulseCurrent::d_ll_d_w(SpikeTrain* st, int n)
@@ -197,6 +214,23 @@ DirichletImpulseCurrent::DirichletImpulseCurrent(Glm* glm, int N, int D_imp, std
 
     // Initialize the sampler. The number of steps is set in glm.h
     sampler = new ImpulseHmcSampler(this, rng);
+}
+
+DirichletImpulseCurrent::DirichletImpulseCurrent(int N, int D_imp, Random* random, Dirichlet* prior)
+{
+    this->N = N;
+    this->D_imp = D_imp;
+    this->prior = prior;
+
+    // Initialize impulse response weights.
+    for (int n=0; n < N; n++)
+    {
+        g_ir.push_back(prior->sample());
+        w_ir.push_back(prior->as_dirichlet(g_ir[n]));
+    }
+
+    // Initialize the sampler. The number of steps is set in glm.h
+    sampler = new ImpulseHmcSampler(this, random->rng);
 }
 
 

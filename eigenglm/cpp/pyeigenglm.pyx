@@ -9,30 +9,38 @@ cimport numpy as np
 from libcpp.vector cimport vector
 
 # Import C++ distributions
-from pydistributions cimport DiagonalGaussian
+from pydistributions cimport *
 
 # Import C++ classes from eigenglm.h
 cdef extern from "eigenglm.h":
+
     # Spike train class encapsulates the observed datasets
     cdef cppclass SpikeTrain:
         SpikeTrain(int, int, double, double*, int, vector[double*]) except +
 
     # Bias class for the constant activation bias
     cdef cppclass BiasCurrent:
+        BiasCurrent(Random*, DiagonalGaussian*) except +
         double get_bias()
 
     # Linear impulse response class
     cdef cppclass LinearImpulseCurrent:
+        LinearImpulseCurrent(int, int, Random*, DiagonalGaussian*) except +
         void d_ll_d_w(SpikeTrain* st, int n, double* dw_buffer)
         void get_w(double* w_buffer)
         void set_w(double* w_buffer)
 
     # Dirichlet impulse response class
     cdef cppclass DirichletImpulseCurrent:
+        DirichletImpulseCurrent(int, int, Random*, Dirichlet*) except +
         void d_ll_d_g(SpikeTrain* st, int n, double* dg_buffer)
         void get_w(double* w_buffer)
         void get_g(double* g_buffer)
         void set_g(double* g_buffer)
+
+    # Constant Network class
+    cdef cppclass ConstantNetworkColumn:
+        ConstantNetworkColumn(int) except +
 
     # Gaussian network class
     cdef cppclass GaussianNetworkColumn:
@@ -41,10 +49,14 @@ cdef extern from "eigenglm.h":
         void set_A(int n_pre, double a)
         void set_W(int n_pre, double w)
 
+    # Nonlinearities
+    cdef cppclass SmoothRectLinearLink:
+        SmoothRectLinearLink() except +
 
     # Main GLM class
     cdef cppclass StandardGlm:
         StandardGlm(int, int, int) except +
+        StandardGlm(int, int, Random*, BiasCurrent*, LinearImpulseCurrent*, SmoothRectLinearLink*, ConstantNetworkColumn*) except +
         void add_spike_train(SpikeTrain *s)
 
         # Getters
@@ -76,7 +88,6 @@ cdef extern from "eigenglm.h":
         # Inference
         void coord_descent_step(double momentum)
         void resample()
-
 
 # Expose the SpikeTrain class to Python
 cdef class PySpikeTrain:
@@ -112,6 +123,43 @@ cdef class PySpikeTrain:
     def __dealloc__(self):
         del self.thisptr
 
+# Wrappers for the component classes
+cdef class PyBiasCurrent:
+    cdef BiasCurrent *thisptr
+
+    def __cinit__(self, PyRandom random, PyDiagonalGaussian prior):
+        self.thisptr = new BiasCurrent(random.thisptr, prior.thisptr)
+
+    def __dealloc__(self):
+        del self.thisptr
+
+cdef class PyLinearImpulseCurrent:
+    cdef LinearImpulseCurrent *thisptr
+
+    def __cinit__(self, int N, int D_imp, PyRandom random, PyDiagonalGaussian prior):
+        self.thisptr = new LinearImpulseCurrent(N, D_imp, random.thisptr, prior.thisptr)
+
+    def __dealloc__(self):
+        del self.thisptr
+
+cdef class PyConstantNetworkColumn:
+    cdef ConstantNetworkColumn *thisptr
+
+    def __cinit__(self, int N):
+        self.thisptr = new ConstantNetworkColumn(N)
+
+    def __dealloc__(self):
+        del self.thisptr
+
+cdef class PySmoothRectLinearLink:
+    cdef SmoothRectLinearLink *thisptr
+
+    def __cinit__(self):
+        self.thisptr = new SmoothRectLinearLink()
+
+    def __dealloc__(self):
+        del self.thisptr
+
 # Expose the GLM class to Python
 cdef class PyStandardGlm:
     cdef StandardGlm *thisptr
@@ -124,6 +172,21 @@ cdef class PyStandardGlm:
         self.n = n
         self.N = N
         self.D_imp = D_imp
+
+    def __cinit__(self, int n, int N,
+                  PyRandom random,
+                  PyBiasCurrent bias,
+                  PyLinearImpulseCurrent impulse,
+                  PySmoothRectLinearLink nlin,
+                  PyConstantNetworkColumn network):
+        self.thisptr = new StandardGlm(n, N,
+                                       random.thisptr,
+                                       bias.thisptr,
+                                       impulse.thisptr,
+                                       nlin.thisptr,
+                                       network.thisptr)
+        self.n = n
+        self.N = N
 
     def __dealloc__(self):
         del self.thisptr
