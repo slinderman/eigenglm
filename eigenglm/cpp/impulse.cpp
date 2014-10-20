@@ -360,7 +360,8 @@ void DirichletImpulseCurrent::resample()
         }
         else
         {
-            w_ir[n_pre] = prior->sample();
+            g_ir[n_pre] = prior->sample();
+            w_ir[n_pre] = prior->as_dirichlet(g_ir[n_pre]);
         }
     }
 }

@@ -54,6 +54,9 @@ class _GLM(object):
     def add_data(self, data):
         raise NotImplementedError()
 
+    def log_prior(self):
+        raise NotImplementedError()
+
     def log_likelihood(self, data=None):
         raise NotImplementedError()
 
@@ -102,7 +105,7 @@ class StandardGLM(_GLM):
         self.impulse_basis = Basis(params.impulse.basis)
 
         # Create the C++ wrapper object
-        self.glm = peg.PyStandardGlm(N, self.params.impulse.basis.D)
+        self.glm = peg.PyStandardGlm(n, N, self.params.impulse.basis.D)
 
     def check_data(self, data):
         super(StandardGLM, self).check_data(data)
@@ -132,6 +135,9 @@ class StandardGLM(_GLM):
         st = peg.PySpikeTrain(N, T, dt, Sn, D_imp, filtered_S)
         self.glm.add_spike_train(st)
         self.spiketrains.append(st)
+
+    def log_prior(self):
+        return self.glm.log_prior()
 
     def log_likelihood(self, data=None):
         return self.glm.log_likelihood()
@@ -177,7 +183,7 @@ class NormalizedGLM(_GLM):
         self.impulse_basis = Basis(params.impulse.basis)
 
         # Create the C++ wrapper object
-        self.glm = peg.PyNormalizedGlm(N, self.params.impulse.basis.D)
+        self.glm = peg.PyNormalizedGlm(n, N, self.params.impulse.basis.D)
 
     def check_data(self, data):
         super(NormalizedGLM, self).check_data(data)
@@ -207,6 +213,9 @@ class NormalizedGLM(_GLM):
         st = peg.PySpikeTrain(N, T, dt, Sn, D_imp, filtered_S)
         self.glm.add_spike_train(st)
         self.spiketrains.append(st)
+
+    def log_prior(self):
+        return self.glm.log_prior()
 
     def log_likelihood(self, data=None):
         return self.glm.log_likelihood()

@@ -8,6 +8,10 @@ cimport numpy as np
 # Import C++ classes from distributions.h
 cdef extern from "distributions.h":
 
+    cdef cppclass IndependentBernoulli:
+        IndependentBernoulli() except +
+        double logp(double*)
+
     cdef cppclass DiagonalGuassian:
         DiagonalGuassian() except +
         double logp(double*)
@@ -19,6 +23,21 @@ cdef extern from "distributions.h":
         void grad(double*, double*)
         void as_dirichlet(double*, double*)
         void dw_dg(double*, double*)
+
+cdef class PyIndependentBernoulli:
+    cdef IndependentBernoulli *thisptr
+    cdef public int D
+
+    def __cinit__(self):
+        self.thisptr = new IndependentBernoulli()
+        self.D = 1
+
+    def __dealloc__(self):
+        del self.thisptr
+
+    def logp(self, double[::1] x):
+        assert x.size == self.D
+        return self.thisptr.logp(&x[0])
 
 cdef class PyDiagonalGaussian:
     cdef DiagonalGuassian *thisptr

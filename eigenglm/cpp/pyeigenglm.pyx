@@ -41,12 +41,13 @@ cdef extern from "eigenglm.h":
 
     # Main GLM class
     cdef cppclass StandardGlm:
-        StandardGlm(int, int) except +
+        StandardGlm(int, int, int) except +
         void add_spike_train(SpikeTrain *s)
 
         # Getters
         BiasCurrent* get_bias_component()
         LinearImpulseCurrent* get_impulse_component()
+        double log_prior()
         double log_likelihood()
         double log_probability()
         void get_firing_rate(SpikeTrain *s, double* fr)
@@ -57,13 +58,14 @@ cdef extern from "eigenglm.h":
 
     # Normalized GLM class
     cdef cppclass NormalizedGlm:
-        NormalizedGlm(int, int) except +
+        NormalizedGlm(int, int, int) except +
         void add_spike_train(SpikeTrain *s)
 
         # Getters
         BiasCurrent* get_bias_component()
         DirichletImpulseCurrent* get_impulse_component()
         GaussianNetworkColumn* get_network_component()
+        double log_prior()
         double log_likelihood()
         double log_probability()
         void get_firing_rate(SpikeTrain *s, double* fr)
@@ -110,11 +112,13 @@ cdef class PySpikeTrain:
 # Expose the GLM class to Python
 cdef class PyStandardGlm:
     cdef StandardGlm *thisptr
+    cdef public int n
     cdef public int N
     cdef public int D_imp
 
-    def __cinit__(self, int N, int D_imp):
-        self.thisptr = new StandardGlm(N, D_imp)
+    def __cinit__(self, int n, int N, int D_imp):
+        self.thisptr = new StandardGlm(n, N, D_imp)
+        self.n = n
         self.N = N
         self.D_imp = D_imp
 
@@ -141,6 +145,9 @@ cdef class PyStandardGlm:
         self.thisptr.get_impulse_component().d_ll_d_w(st.thisptr, n, &dw[0])
         return np.asarray(dw)
 
+    def log_prior(self):
+        return self.thisptr.log_prior()
+
     def log_likelihood(self):
         return self.thisptr.log_likelihood()
 
@@ -162,11 +169,13 @@ cdef class PyStandardGlm:
 # Expose the GLM class to Python
 cdef class PyNormalizedGlm:
     cdef NormalizedGlm *thisptr
+    cdef public int n
     cdef public int N
     cdef public int D_imp
 
-    def __cinit__(self, int N, int D_imp):
-        self.thisptr = new NormalizedGlm(N, D_imp)
+    def __cinit__(self, int n, int N, int D_imp):
+        self.thisptr = new NormalizedGlm(n, N, D_imp)
+        self.n = n
         self.N = N
         self.D_imp = D_imp
 
@@ -213,6 +222,9 @@ cdef class PyNormalizedGlm:
         cdef double[::1] dg = np.zeros(self.D_imp)
         self.thisptr.get_impulse_component().d_ll_d_g(st.thisptr, n, &dg[0])
         return np.asarray(dg)
+
+    def log_prior(self):
+        return self.thisptr.log_prior()
 
     def log_likelihood(self):
         return self.thisptr.log_likelihood()

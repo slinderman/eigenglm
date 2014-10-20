@@ -213,23 +213,45 @@ ConstantNetworkColumn::ConstantNetworkColumn(Glm* glm)
 
 GaussianNetworkColumn::GaussianNetworkColumn(Glm* glm,
                                              std::default_random_engine rng,
+                                             double pA,
+                                             double pA_self,
                                              double mu,
-                                             double sigma)
+                                             double sigma,
+                                             double mu_self,
+                                             double sigma_self)
 {
     this->glm = glm;
 
-    // Initialize adjacency matrix to fully connected
-    A = VectorXd::Ones(glm->N);
+    // Create a Bernoulli prior for A
+    VectorXd rho = VectorXd::Constant(glm->N, pA);
+
+    // Overwrite the self connection probability
+    rho(this->glm->n) = pA_self;
+
+    A_prior = new IndependentBernoulli(rho, rng);
 
     // Create a Gaussian prior for W
     VectorXd mu_vec = VectorXd::Constant(glm->N, mu);
     VectorXd sigma_vec = VectorXd::Constant(glm->N, sigma);
-    prior = new DiagonalGuassian(mu_vec, sigma_vec, rng);
 
+    // Overwrite the self connection prior
+    mu_vec(this->glm->n) = mu_self;
+    sigma_vec(this->glm->n) = sigma_self;
 
-    // Sample a weight matrix from the prior
-    W = prior->sample();
+    W_prior = new DiagonalGuassian(mu_vec, sigma_vec, rng);
+
+    // Sample weight and adjacency matrices from the prior
+    A = A_prior->sample();
+    W = W_prior->sample();
 }
+
+double GaussianNetworkColumn::log_probability()
+{
+    return A_prior->logp(A) + W_prior->logp(W);
+}
+
+void GaussianNetworkColumn::resample() {}
+void GaussianNetworkColumn::coord_descent_step(double momentum) {}
 
 void GaussianNetworkColumn::set_A(int n_pre, double a)
 {
@@ -240,14 +262,6 @@ void GaussianNetworkColumn::set_W(int n_pre, double w)
 {
     W(n_pre) = w;
 }
-
-double GaussianNetworkColumn::log_probability()
-{
-    return prior->logp(W);
-}
-
-void GaussianNetworkColumn::resample() {}
-void GaussianNetworkColumn::coord_descent_step(double momentum) {}
 
 /**
  *  GLM class
@@ -291,6 +305,18 @@ void Glm::get_firing_rate(SpikeTrain* s, double* fr_buffer)
     fr = vec_fr;
 }
 
+double Glm::log_prior()
+{
+    double lp = 0.0;
+
+    // Add subcomponent priors
+    lp += bias->log_probability();
+    lp += impulse->log_probability();
+    lp += nlin->log_probability();
+    lp += network->log_probability();
+    return lp;
+}
+
 double Glm::log_likelihood()
 {
     double ll = 0;
@@ -312,13 +338,8 @@ double Glm::log_likelihood()
 
 double Glm::log_probability()
 {
-    double lp = 0.0;
-
-    // Add subcomponent priors
-    lp += bias->log_probability();
-    lp += impulse->log_probability();
-    lp += nlin->log_probability();
-    lp += network->log_probability();
+    // Add the prior.
+    double lp = log_prior();
 
     // Add the likelihood.
     lp += log_likelihood();
@@ -419,8 +440,9 @@ void Glm::resample()
 /**
  *  Standard GLM implementation
  */
-void StandardGlm::initialize(int N, int D_imp, int seed)
+void StandardGlm::initialize(int n, int N, int D_imp, int seed)
 {
+    this->n = n;
     this->N = N;
 
     // Initialize random number generator
@@ -433,22 +455,23 @@ void StandardGlm::initialize(int N, int D_imp, int seed)
     this->network = new ConstantNetworkColumn(this);
 }
 
-StandardGlm::StandardGlm(int N, int D_imp, int seed)
+StandardGlm::StandardGlm(int n, int N, int D_imp, int seed)
 {
-    initialize(N, D_imp, seed);
+    initialize(n, N, D_imp, seed);
 }
 
-StandardGlm::StandardGlm(int N, int D_imp)
+StandardGlm::StandardGlm(int n, int N, int D_imp)
 {
     int seed = time(NULL);
-    initialize(N, D_imp, seed);
+    initialize(n, N, D_imp, seed);
 }
 
 /**
  *  Normalized GLM implementation
  */
-void NormalizedGlm::initialize(int N, int D_imp, int seed)
+void NormalizedGlm::initialize(int n, int N, int D_imp, int seed)
 {
+    this->n = n;
     this->N = N;
 
     // Initialize random number generator
@@ -458,18 +481,18 @@ void NormalizedGlm::initialize(int N, int D_imp, int seed)
     this->bias = new BiasCurrent(this, rng, 1.0, 1.0);
     this->impulse = new DirichletImpulseCurrent(this, N, D_imp, rng);
     this->nlin = new SmoothRectLinearLink();
-    this->network = new GaussianNetworkColumn(this, rng, 1.0, 1.0);
+    this->network = new GaussianNetworkColumn(this, rng, 0.5, 0.9, 0.0, 1.0, -1.0, 0.5);
 }
 
-NormalizedGlm::NormalizedGlm(int N, int D_imp, int seed)
+NormalizedGlm::NormalizedGlm(int n, int N, int D_imp, int seed)
 {
-    initialize(N, D_imp, seed);
+    initialize(n, N, D_imp, seed);
 }
 
-NormalizedGlm::NormalizedGlm(int N, int D_imp)
+NormalizedGlm::NormalizedGlm(int n, int N, int D_imp)
 {
     int seed = time(NULL);
-    initialize(N, D_imp, seed);
+    initialize(n, N, D_imp, seed);
 }
 
 

@@ -50,10 +50,11 @@ def run():
     for i in range(N_iters):
         population.resample()
         ll = population.log_likelihood()
+        lp = population.log_probability()
 
         if i % intvl == 0:
             stop = time.time()
-            print "Iteration ", i, ":\tLL: %.3f" % ll, "\tIters/sec: %.3f" % (intvl/(stop-start))
+            print "Iteration ", i, ":\tLP: %.3f" % lp, "\tIters/sec: %.3f" % (intvl/(stop-start))
             start = stop
 
 run()

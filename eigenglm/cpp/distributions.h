@@ -34,6 +34,88 @@ public:
     virtual MatrixXd sample() = 0;
 };
 
+class IndependentBernoulli : public Distribution
+{
+    int D;
+    VectorXd rho;
+    VectorXd logrho;
+    VectorXd lognotrho;
+    std::uniform_real_distribution<double> uniform;
+
+private:
+    void initialize(VectorXd rho)
+    {
+        this->rho = rho;
+        this->logrho = rho.array().log();
+        this->lognotrho = (1.0-rho.array()).log();
+        this->D = rho.size();
+        uniform = std::uniform_real_distribution<double>(0.0,1.0);
+    }
+public:
+    IndependentBernoulli()
+    {
+        rho = VectorXd::Constant(this->D, 0.5);
+        initialize(rho);
+    }
+
+    IndependentBernoulli(VectorXd rho,
+                         std::default_random_engine rng) :
+                         Distribution(rng)
+    {
+        initialize(rho);
+    }
+
+    IndependentBernoulli(double rho,
+                     std::default_random_engine rng) :
+                     Distribution(rng)
+    {
+        VectorXd rhov = VectorXd::Constant(1, rho);
+        initialize(rhov);
+    }
+
+    ~IndependentBernoulli() {}
+
+    double logp(MatrixXd x)
+    {
+        // TODO: input checking?
+        return (x.array() * logrho.array()).sum() +
+               ((1.0-x.array()) * lognotrho.array()).sum();
+    }
+
+    double logp(double* x_buffer)
+    {
+        NPVector<double> x_np(x_buffer, D);
+        VectorXd x = x_np;
+        return logp(x);
+    }
+
+    void grad(MatrixXd x, MatrixXd* dx)
+    {
+        *dx = VectorXd::Zero(D);
+    }
+
+    void grad(double* x_buffer, double* dx_buffer)
+    {
+        NPVector<double> dx_np(dx_buffer, D, 1);
+//        dx_np.array() = 0;
+    }
+
+    MatrixXd sample()
+    {
+        VectorXd x(D);
+        for (int d=0; d<D; d++)
+        {
+            x(d) = (uniform(rng) < rho(d));
+        }
+        return x;
+    }
+};
+
+
+
+/**
+ *  Diagonal Gaussian distribution, but not necessarily spherical.
+ */
 class DiagonalGuassian : public Distribution
 {
     int D;
@@ -64,6 +146,17 @@ public:
         this->mu = mu;
         this->sigma = sigma;
         this->D = mu.size();
+        this->normal = std::normal_distribution<double>(0.0, 1.0);
+    }
+
+    DiagonalGuassian(double mu,
+                     double sigma,
+                     std::default_random_engine rng) :
+                     Distribution(rng)
+    {
+        this->mu = VectorXd::Constant(1, mu);
+        this->sigma = VectorXd::Constant(1, sigma);
+        this->D = 1;
         this->normal = std::normal_distribution<double>(0.0, 1.0);
     }
 

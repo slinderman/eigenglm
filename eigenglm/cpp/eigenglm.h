@@ -231,16 +231,23 @@ public:
 
 class GaussianNetworkColumn : public NetworkColumn
 {
-    Distribution* prior;
+    DiagonalGuassian* W_prior;
+    IndependentBernoulli* A_prior;
 
 public:
-    GaussianNetworkColumn(Glm* glm, std::default_random_engine rng, double mu, double sigma);
-    void set_A(int n_pre, double a);
-    void set_W(int n_pre, double w);
+    GaussianNetworkColumn(Glm* glm, std::default_random_engine rng,
+                          double pA, double pA_self,
+                          double mu, double sigma,
+                          double mu_self, double sigma_self
+                          );
 
     double log_probability();
     void coord_descent_step(double momentum);
     void resample();
+
+    // Getters and setters
+    void set_A(int n_pre, double a);
+    void set_W(int n_pre, double w);
 };
 
 class SmoothRectLinearLink : public Component
@@ -258,6 +265,9 @@ public:
 class Glm : public Component
 {
 public:
+    // Identity of this neuron
+    int n;
+
     // Number of presynaptic neurons
     int N;
 
@@ -277,6 +287,7 @@ public:
 
     void get_firing_rate(SpikeTrain *s, VectorXd *fr);
     void get_firing_rate(SpikeTrain *s, double* fr_buffer);
+    double log_prior();
     double log_likelihood();
     double log_probability();
 
@@ -294,12 +305,12 @@ public:
 class StandardGlm : public Glm
 {
 private:
-    void initialize(int N, int D_imp, int seed);
+    void initialize(int n, int N, int D_imp, int seed);
 
 public:
     // Constructor
-    StandardGlm(int N, int D_imp);
-    StandardGlm(int N, int D_imp, int seed);
+    StandardGlm(int n, int N, int D_imp);
+    StandardGlm(int n, int N, int D_imp, int seed);
     ~StandardGlm() {}
 
     // Getters
@@ -311,12 +322,12 @@ public:
 class NormalizedGlm : public Glm
 {
 private:
-    void initialize(int N, int D_imp, int seed);
+    void initialize(int n, int N, int D_imp, int seed);
 
 public:
     // Constructor
-    NormalizedGlm(int N, int D_imp);
-    NormalizedGlm(int N, int D_imp, int seed);
+    NormalizedGlm(int n, int N, int D_imp);
+    NormalizedGlm(int n, int N, int D_imp, int seed);
     ~NormalizedGlm() {}
 
     // Getters

@@ -46,12 +46,12 @@ class Population(object):
         for glm in self.glms:
             glm.add_data(data)
 
-    def log_prior(self, vars):
+    def log_prior(self):
         """ Compute the log joint probability under a given set of variables
         """
         lp = 0.0
-        lp += self.latent.log_probability()
-        lp += self.network.log_probability()
+        # lp += self.latent.log_probability()
+        # lp += self.network.log_probability()
         for glm in self.glms:
             lp += glm.log_prior()
 
