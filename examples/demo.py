@@ -54,7 +54,7 @@ def run():
     # Run some MCMC
     N_iters = 1000
     print "Running ", N_iters, " iterations of MCMC."
-    intvl = 25
+    intvl = 5
     start = time.time()
     for i in range(N_iters):
         population.resample()

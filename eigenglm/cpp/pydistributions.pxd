@@ -8,8 +8,8 @@ cdef extern from "distributions.h":
 
     cdef cppclass IndependentBernoulli:
         IndependentBernoulli(double*, int, Random*) except +
-        void get_rho(double *)
-        void set_rho(double *)
+        void get_rho(double*)
+        void set_rho(double*)
         double logp(double*)
 
     cdef cppclass DiagonalGaussian:

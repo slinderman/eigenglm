@@ -1,6 +1,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <vector>
+#include <math.h>
 
 #include "eigenglm.h"
 
@@ -152,15 +153,20 @@ void BiasCurrent::resample()
  *  Nonlinearity classes.
  */
 
+inline double rect(double x) { return (x < 0.0 ? exp(x) : 1+x); }
+inline double drect_dx(double x) { return (x < 0.0 ? exp(x) : 1.0); }
+
 VectorXd SmoothRectLinearLink::compute_firing_rate(VectorXd I)
 {
-    return (1.0 + I.array().exp()).log();
+//    return (1.0 + I.array().exp()).log();
+    return I.unaryExpr(std::ptr_fun(rect));
 }
 
 VectorXd SmoothRectLinearLink::d_firing_rate_d_I(VectorXd I)
 {
     // Gradient of the firing rate with respect to I
-    return I.array().exp() / (1.0 + I.array().exp());
+//    return I.array().exp() / (1.0 + I.array().exp());
+    return I.unaryExpr(std::ptr_fun(drect_dx));
 }
 
 /**

@@ -14,9 +14,6 @@ cdef class PyRandom:
         self.thisptr = new Random(seed)
 
 cdef class PyIndependentBernoulli:
-    #cdef IndependentBernoulli *thisptr
-    #cdef public int D
-
     def __cinit__(self, double[::1] rho, PyRandom random):
         self.D = rho.size
         self.thisptr = new IndependentBernoulli(&rho[0], self.D, random.thisptr)
@@ -27,6 +24,16 @@ cdef class PyIndependentBernoulli:
     def logp(self, double[::1] x):
         assert x.size == self.D
         return self.thisptr.logp(&x[0])
+
+    def get_rho(self):
+        cdef double[::1] rho = np.zeros(self.D)
+        self.thisptr.get_rho(&rho[0])
+        return np.asarray(rho)
+
+    def set_rho(self, double[::1] rho):
+        assert rho.size == self.D
+        self.thisptr.set_rho(&rho[0])
+
 
 cdef class PyDiagonalGaussian:
     #cdef DiagonalGaussian *thisptr
@@ -49,6 +56,24 @@ cdef class PyDiagonalGaussian:
         cdef double[::1] dx = np.zeros(self.D)
         self.thisptr.grad(&x[0], &dx[0])
         return np.asarray(dx).reshape(self.D)
+
+    def get_mu(self):
+        cdef double[::1] mu = np.zeros(self.D)
+        self.thisptr.get_mu(&mu[0])
+        return np.asarray(mu)
+
+    def set_mu(self, double[::1] mu):
+        assert mu.size == self.D
+        self.thisptr.set_mu(&mu[0])
+
+    def get_sigma(self):
+        cdef double[::1] sigma = np.zeros(self.D)
+        self.thisptr.get_sigma(&sigma[0])
+        return np.asarray(sigma)
+
+    def set_sigma(self, double[::1] sigma):
+        assert sigma.size == self.D
+        self.thisptr.set_sigma(&sigma[0])
 
 
 cdef class PyDirichlet:

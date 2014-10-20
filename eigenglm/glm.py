@@ -287,15 +287,17 @@ class NormalizedGLM(_GLM):
             np.polynomial.hermite.hermgauss(deg_gauss_hermite)
 
         # TODO: Get the weight prior from a network object
-        mu_w = np.ones(self.N)
-        sigma_w = np.ones(self.N)
-        rho = 0.5 * np.ones(self.N)
+        mu_w = self.W_prior.get_mu()
+        sigma_w = self.W_prior.get_sigma()
+
+        # rho = 0.5 * np.ones(self.N)
+        rho = self.A_prior.get_rho()
 
         A = self.An
         W = self.Wn
 
         for n_pre in range(self.N):
-            # print "Sampling A and W for ", n_pre
+            # print "Sampling A and W for ", n_pre, " to ", self.n
 
             # Compute the prior probabilities
             prior_lp_A = np.log(rho[n_pre])
