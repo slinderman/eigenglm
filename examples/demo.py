@@ -31,6 +31,9 @@ def run():
     # glm = NormalizedGLM(0, N, prms)
     population = NormalizedGLMPopulation(N, prms)
 
+    print "A: ", population.A
+    print "W: ", population.W
+
     # Simulate some data
     T = 60
     dt = 0.001

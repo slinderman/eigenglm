@@ -19,7 +19,7 @@ LinearImpulseCurrent::LinearImpulseCurrent(Glm* glm, int N, int D_imp, std::defa
     VectorXd mu = VectorXd::Constant(D_imp, 0);
     VectorXd sigma = VectorXd::Constant(D_imp, 1);
 
-    prior = new DiagonalGuassian(mu, sigma, rng);
+    prior = new DiagonalGaussian(mu, sigma, rng);
 
     // Initialize impulse response weights.
     for (int n=0; n < N; n++)

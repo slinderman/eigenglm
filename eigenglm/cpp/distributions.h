@@ -97,7 +97,7 @@ public:
     void grad(double* x_buffer, double* dx_buffer)
     {
         NPVector<double> dx_np(dx_buffer, D, 1);
-//        dx_np.array() = 0;
+//        dx_np = 0;
     }
 
     MatrixXd sample()
@@ -116,7 +116,7 @@ public:
 /**
  *  Diagonal Gaussian distribution, but not necessarily spherical.
  */
-class DiagonalGuassian : public Distribution
+class DiagonalGaussian : public Distribution
 {
     int D;
     VectorXd mu;
@@ -124,7 +124,7 @@ class DiagonalGuassian : public Distribution
     std::normal_distribution<double> normal;
 
 public:
-    DiagonalGuassian()
+    DiagonalGaussian()
     {
         this->D = 1;
         mu = VectorXd::Zero(D);
@@ -138,7 +138,7 @@ public:
         this->normal = std::normal_distribution<double>(0.0, 1.0);
     }
 
-    DiagonalGuassian(VectorXd mu,
+    DiagonalGaussian(VectorXd mu,
                      VectorXd sigma,
                      std::default_random_engine rng) :
                      Distribution(rng)
@@ -149,7 +149,7 @@ public:
         this->normal = std::normal_distribution<double>(0.0, 1.0);
     }
 
-    DiagonalGuassian(double mu,
+    DiagonalGaussian(double mu,
                      double sigma,
                      std::default_random_engine rng) :
                      Distribution(rng)
@@ -160,7 +160,7 @@ public:
         this->normal = std::normal_distribution<double>(0.0, 1.0);
     }
 
-    ~DiagonalGuassian() {}
+    ~DiagonalGaussian() {}
 
     double logp(MatrixXd x)
     {
@@ -174,7 +174,7 @@ public:
     {
         NPMatrix<double> x_np(x_buffer, D, 1);
         MatrixXd x = x_np;
-        return DiagonalGuassian::logp(x);
+        return DiagonalGaussian::logp(x);
     }
 
     void grad(MatrixXd x, MatrixXd* dx)
@@ -188,7 +188,7 @@ public:
         NPMatrix<double> dx_np(dx_buffer, D, 1);
         MatrixXd x = x_np;
         MatrixXd dx(x.rows(), x.cols());
-        DiagonalGuassian::grad(x, &dx);
+        DiagonalGaussian::grad(x, &dx);
         dx_np = dx;
     }
 

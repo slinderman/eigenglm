@@ -231,7 +231,7 @@ public:
 
 class GaussianNetworkColumn : public NetworkColumn
 {
-    DiagonalGuassian* W_prior;
+    DiagonalGaussian* W_prior;
     IndependentBernoulli* A_prior;
 
 public:

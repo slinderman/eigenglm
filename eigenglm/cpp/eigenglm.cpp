@@ -53,12 +53,7 @@ BiasCurrent::BiasCurrent(Glm* glm, std::default_random_engine rng, double mu, do
     parent = glm;
 
     // Create a Gaussian prior
-    VectorXd mu_vec(1);
-    mu_vec(0) = mu;
-    VectorXd sigma_vec(1);
-    sigma_vec(0) = sigma;
-
-    prior = new DiagonalGuassian(mu_vec, sigma_vec, rng);
+    prior = new DiagonalGaussian(mu, sigma, rng);
     I_bias = prior->sample()(0);
 
     // Initialize the sampler. The number of steps is set in glm.h
@@ -238,7 +233,7 @@ GaussianNetworkColumn::GaussianNetworkColumn(Glm* glm,
     mu_vec(this->glm->n) = mu_self;
     sigma_vec(this->glm->n) = sigma_self;
 
-    W_prior = new DiagonalGuassian(mu_vec, sigma_vec, rng);
+    W_prior = new DiagonalGaussian(mu_vec, sigma_vec, rng);
 
     // Sample weight and adjacency matrices from the prior
     A = A_prior->sample();

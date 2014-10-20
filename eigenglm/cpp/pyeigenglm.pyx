@@ -8,6 +8,9 @@ cimport numpy as np
 
 from libcpp.vector cimport vector
 
+# Import C++ distributions
+from pydistributions cimport DiagonalGaussian
+
 # Import C++ classes from eigenglm.h
 cdef extern from "eigenglm.h":
     # Spike train class encapsulates the observed datasets
