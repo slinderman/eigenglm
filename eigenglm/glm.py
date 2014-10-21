@@ -66,29 +66,41 @@ class _GLM(object):
     def log_probability(self, data=None):
         raise NotImplementedError()
 
+    def firing_rate(self, data):
+        if isinstance(data, peg.PySpikeTrain):
+            return self.glm.get_firing_rate(data)
+        elif isinstance(data, dict):
+            self.add_data(data)
+            fr = self.glm.get_firing_rate(self.spiketrains[-1])
+            # TODO: Remove from c++ class too
+            self.spiketrains.remove(-1)
+            return fr
+        else:
+            raise Exception("Unrecognized data type!")
+
     def resample(self):
         raise NotImplementedError()
 
     def sample(self):
         raise NotImplementedError()
 
-    def plot_firing_rate(self, data=None, color=None, T_lim=None, plot_currents=True, ax=None):
-        # TODO: Plot the given spike train
-
-        # HACK: For now just plot the first spike train
-        st = self.spiketrains[0]
-        tt = st['dt'] * np.arange(0, st['T'])
-        fr = self.glm.get_firing_rate(st)
-
-        # Make a figure
-        ax_given = ax is not None
-        if not ax_given:
-            fig = create_figure((4,3))
-            ax = fig.add_subplot(1,1,1)
-        ax.plot(tt, fr, color=color)
-
-        if not ax_given:
-            return ax
+    # def plot_firing_rate(self, data=None, color=None, T_lim=None, plot_currents=True, ax=None):
+    #     # TODO: Plot the given spike train
+    #
+    #     # HACK: For now just plot the first spike train
+    #     st = self.spiketrains[0]
+    #     tt = st['dt'] * np.arange(0, st['T'])
+    #     fr = self.glm.get_firing_rate(st)
+    #
+    #     # Make a figure
+    #     ax_given = ax is not None
+    #     if not ax_given:
+    #         fig = create_figure((4,3))
+    #         ax = fig.add_subplot(1,1,1)
+    #     ax.plot(tt, fr, color=color)
+    #
+    #     if not ax_given:
+    #         return ax
 
 
 ##

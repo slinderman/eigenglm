@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from eigenglm import *
-from eigenglm.plotting import *
 
 # Simple helper function to collect samples
 def collect_sample(population):
@@ -15,8 +14,9 @@ def collect_sample(population):
     A = population.A
     bias = population.bias
     ir = population.impulse_response()
+    frs = population.firing_rate(0)
 
-    return bias, W, A, ir
+    return bias, W, A, ir, frs
 
 def run():
     # Specify the number of neurons in the population
@@ -46,7 +46,11 @@ def run():
     # Initialize some plotting
     plt.ion()
     network_plotter = NetworkPlotProvider(A_true=population.A, W_true=population.W)
-
+    fr0_plotter = FiringRatePlotter(fr_true=population.firing_rate(0)[:,0],
+                                    S=data['S'][:,0],
+                                    t=data['dt'] * np.arange(data['T']),
+                                    T_slice=slice(int(0.9*data['T']), -1))
+    import pdb; pdb.set_trace()
     # Run some MCMC
     N_iters = 1000
     print "Running ", N_iters, " iterations of MCMC."
@@ -57,14 +61,18 @@ def run():
         population.resample()
         lp = population.log_probability()
 
+        # Collect a sample each iteration
+        bias, W, A, ir, frs = collect_sample(population)
+        samples.append((bias, W, A, ir, frs))
+
         if i % print_interval == 0:
             stop = time.time()
             print "Iteration ", i, ":\tLP: %.3f" % lp, "\tIters/sec: %.3f" % (print_interval/(stop-start))
             start = stop
-            network_plotter.plot((population.A, population.W))
+            network_plotter.plot((A, W), title="Iteration %d" % i)
+            fr0_plotter.plot(frs[:,0])
 
-        # Collect a sample each iteration
-        samples.append(collect_sample(population))
+
 
     # Now analyze the samples
     print "True bias:\t", population.bias

@@ -79,6 +79,15 @@ class Population(object):
 
         return lp
 
+    def firing_rate(self, s):
+        """
+        Get the firing rate of the s-th spike train
+        """
+        frs = []
+        for glm in self.glms:
+            frs.append(glm.firing_rate(glm.spiketrains[s]))
+        return np.array(frs).T
+
     def simulate(self, T_stop, dt, T_start=0, stim=None, dt_stim=None,
                  nlin=lambda x: np.log(1+np.exp(x))):
         """ Simulate spikes from a network of coupled GLMs
