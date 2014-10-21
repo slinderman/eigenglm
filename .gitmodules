@@ -1,0 +1,3 @@
+[submodule "eigenglm/deps/pybasicbayes"]
+	path = eigenglm/deps/pybasicbayes
+	url = https://github.com/mattjj/pybasicbayes.git

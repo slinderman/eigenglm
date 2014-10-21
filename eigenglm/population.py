@@ -113,7 +113,7 @@ class Population(object):
         # Get the impulse response functions
         imps = []
         for n_post in np.arange(N):
-            imps.append(self.glms[n_post].impulse_response(dt, self.prms.glms[n_post].impulse.dt_max))
+            imps.append(self.glms[n_post].impulse_response(dt))
         imps = np.transpose(np.array(imps), axes=[1,0,2])
         T_imp = imps.shape[2]
 
@@ -226,6 +226,17 @@ class Population(object):
             W[:,n] = glm.Wn
         return W
 
+    @property
+    def bias(self):
+        bias = np.zeros(self.N)
+        for n,glm in enumerate(self.glms):
+            bias[n] = glm.bias
+        return bias
+
+    def impulse_response(self, dt=0.001):
+        ir = np.array([glm.impulse_response(dt) for glm in self.glms])
+        return ir
+
 class StandardGLMPopulation(Population):
     def __init__(self, N, prms):
         super(StandardGLMPopulation, self).__init__(N, prms)
@@ -238,6 +249,27 @@ class NormalizedGLMPopulation(Population):
     def __init__(self, N, prms):
         super(NormalizedGLMPopulation, self).__init__(N, prms)
 
+        # Initialize hyperpriors
+        self.bias_hyperprior = prms.bias_hyperprior.cls(**prms.bias_hyperprior.prms)
+
         # Initialize the GLMs
         for n in range(N):
-            self.glms.append(NormalizedGLM(n, N, prms.glms[n]))
+            self.glms.append(NormalizedGLM(n, N, prms.glms[n], population=self))
+
+    # Resample hyperpriors
+    def resample_bias_hyperprior(self):
+        # Resample from the NIX prior
+        self.bias_hyperprior.resample(self.bias)
+
+        # Update the priors in the C++ objects
+        for glm in self.glms:
+            glm.bias_prior.set_mu(np.array([self.bias_hyperprior.mu]))
+            glm.bias_prior.set_sigma(np.array([np.sqrt(self.bias_hyperprior.sigmasq)]))
+
+
+    def resample(self):
+        super(NormalizedGLMPopulation, self).resample()
+
+        # Resample the hyperpriors
+        self.resample_bias_hyperprior()
+

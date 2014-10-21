@@ -1,3 +1,5 @@
+import eigenglm.deps.pybasicbayes.distributions as pbd
+
 class BasisParameters:
     type = 'cosine'
     n_eye = 0
@@ -12,11 +14,19 @@ class BasisParameters:
     def D(self):
         return self.n_eye + self.n_bas
 
+class BiasHyperParameters:
+    """
+    Parameters of a Gaussian-Inverse-Chi Sq prior on
+    the mean and variance of the Gaussian biases.
+    """
+    cls = pbd.ScalarGaussianNIX
+    prms = {"mu_0" : 5.0,
+            "sigmasq_0" : 1.0,
+            "kappa_0" : 1.0,
+            "nu_0" : 1.0}
 
 class BiasParameters:
-    # TODO: Implement distribution classes
-    bias_distribution = "gaussian"
-    bias_parameters = {"mu" : 5.0, "sigma" : 1.0}
+    pass
 
 class LinearStimulusParameters:
     stimulus_distribution = "diagonal_gaussian"
@@ -64,6 +74,10 @@ class NormalizedGLMPopulationParameters:
         # TODO: Create latent variable parameters
         # TODO: Create network parameters
 
+        # Hyperprior parameters
+        self.bias_hyperprior = BiasHyperParameters()
+
+        # GLM parameters
         self.glms = []
         for n in range(N):
             self.glms.append(NormalizedGLMParameters())

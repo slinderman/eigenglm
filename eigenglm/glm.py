@@ -22,7 +22,7 @@ class _GLM(object):
     spiketrains = []
     glm = None
 
-    def __init__(self, n, N):
+    def __init__(self, n, N, population=None):
         """
         Default constructor
         :param n: Index of this neuron in [0, N)
@@ -31,6 +31,7 @@ class _GLM(object):
         """
         self.n = n
         self.N = N
+        self.population = population
 
     def check_data(self, data):
         """
@@ -168,7 +169,8 @@ class StandardGLM(_GLM):
         self.glm.resample()
 
     # Properties for the GLM state
-    def impulse_response(self, dt, dt_max):
+    def impulse_response(self, dt):
+        dt_max = self.params.impulse.dt_max
         # Get the L x B basis
         basis = self.impulse_basis.interpolate_basis(dt, dt_max)
         # The N x B weights
@@ -196,8 +198,8 @@ class StandardGLM(_GLM):
 
 
 class NormalizedGLM(_GLM):
-    def __init__(self, n, N, params):
-        super(NormalizedGLM, self).__init__(n, N)
+    def __init__(self, n, N, params, population=None):
+        super(NormalizedGLM, self).__init__(n, N, population=population)
         assert isinstance(params, NormalizedGLMParameters)
         self.params = params
 
@@ -205,7 +207,9 @@ class NormalizedGLM(_GLM):
         self.random = pd.PyRandom(np.random.randint(np.iinfo(np.int32).max))
 
         # Create the bias
-        self.bias_prior = pd.PyDiagonalGaussian(np.array([0.]), np.array([1.]), self.random)
+        self.bias_prior = pd.PyDiagonalGaussian(np.array([self.population.bias_hyperprior.mu]),
+                                                np.sqrt(np.array([self.population.bias_hyperprior.sigmasq])),
+                                                self.random)
         self.bias_component = peg.PyBiasCurrent(self.random, self.bias_prior)
 
         # Create the impulse response
@@ -417,7 +421,8 @@ class NormalizedGLM(_GLM):
         self.collapsed_sample_AW()
 
     # Properties for the GLM state
-    def impulse_response(self, dt, dt_max):
+    def impulse_response(self, dt):
+        dt_max = self.params.impulse.dt_max
         # Get the L x B basis
         ibasis = self.impulse_basis.interpolate_basis(dt, dt_max)
         # The N x B weights
