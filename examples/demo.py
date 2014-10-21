@@ -6,9 +6,10 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from eigenglm import StandardGLMPopulation, StandardGLM, StandardGLMParameters, StandardGLMPopulationParameters
-from eigenglm import NormalizedGLMPopulation, NormalizedGLMParameters, NormalizedGLMPopulationParameters
+from eigenglm import *
+from eigenglm.plotting import *
 
+# Simple helper function to collect samples
 def collect_sample(population):
     W = population.W
     A = population.A
@@ -37,10 +38,14 @@ def run():
     population = NormalizedGLMPopulation(N, prms)
 
     # Simulate some data
-    T = 15
+    T = 60
     dt = 0.001
     data = population.simulate(T, dt)
     population.add_data(data)
+
+    # Initialize some plotting
+    plt.ion()
+    network_plotter = NetworkPlotProvider(A_true=population.A, W_true=population.W)
 
     # Run some MCMC
     N_iters = 1000
@@ -50,14 +55,15 @@ def run():
     start = time.time()
     for i in range(N_iters):
         population.resample()
-        # ll = population.log_likelihood()
         lp = population.log_probability()
 
         if i % print_interval == 0:
             stop = time.time()
             print "Iteration ", i, ":\tLP: %.3f" % lp, "\tIters/sec: %.3f" % (print_interval/(stop-start))
             start = stop
+            network_plotter.plot((population.A, population.W))
 
+        # Collect a sample each iteration
         samples.append(collect_sample(population))
 
     # Now analyze the samples
