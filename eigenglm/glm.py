@@ -222,15 +222,11 @@ class NormalizedGLM(_GLM):
         self.nlin = peg.PySmoothRectLinearLink()
 
         # Create the constant network column
-        rho = 0.5 * np.ones(N)
-        rho[n] = 0.9
-        self.A_prior = pd.PyIndependentBernoulli(rho, self.random)
-
-        mu = np.zeros(N)
-        mu[n] = -1.0
-        sigma = np.ones(N)
-        sigma[n] = 0.5
-        self.W_prior = pd.PyDiagonalGaussian(mu, sigma, self.random)
+        self.A_prior = pd.PyIndependentBernoulli(self.population.network.A_rho(n),
+                                                 self.random)
+        self.W_prior = pd.PyDiagonalGaussian(self.population.network.W_mu(n),
+                                             self.population.network.W_sigma(n),
+                                             self.random)
         self.network_component = peg.PyGaussianNetworkColumn(N, self.random, self.W_prior, self.A_prior)
 
         # Create the GLM

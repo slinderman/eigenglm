@@ -1,6 +1,7 @@
 import numpy as np
 
 from eigenglm.glm import StandardGLM, NormalizedGLM
+from eigenglm.network import ConstantNetwork, GaussianErdosRenyiNetwork
 
 class Population(object):
     """
@@ -208,6 +209,9 @@ class Population(object):
         Resample the latent variables, the network, and the GLMs
         :return:
         """
+        # Resample the network
+        self.network.resample()
+
         for glm in self.glms:
             glm.resample()
 
@@ -217,6 +221,9 @@ class Population(object):
         A = np.zeros((self.N, self.N))
         for n,glm in enumerate(self.glms):
             A[:,n] = glm.An
+
+        # Cast to bool
+        A = A.astype(np.bool)
         return A
 
     @property
@@ -241,6 +248,9 @@ class StandardGLMPopulation(Population):
     def __init__(self, N, prms):
         super(StandardGLMPopulation, self).__init__(N, prms)
 
+        # Initialize the network
+        self._network = ConstantNetwork(N, self, prms.network)
+
         # Initialize the GLMs
         for n in range(N):
             self.glms.append(StandardGLM(n, N, prms.glms[n]))
@@ -252,11 +262,20 @@ class NormalizedGLMPopulation(Population):
         # Initialize hyperpriors
         self.bias_hyperprior = prms.bias_hyperprior.cls(**prms.bias_hyperprior.prms)
 
+        # Initialize the network
+        self._network = GaussianErdosRenyiNetwork(N, self, prms.network)
+
         # Initialize the GLMs
         for n in range(N):
             self.glms.append(NormalizedGLM(n, N, prms.glms[n], population=self))
 
     # Resample hyperpriors
+    def resample(self):
+        super(NormalizedGLMPopulation, self).resample()
+
+        # Resample the hyperpriors
+        self.resample_bias_hyperprior()
+
     def resample_bias_hyperprior(self):
         # Resample from the NIX prior
         self.bias_hyperprior.resample(self.bias)
@@ -265,11 +284,4 @@ class NormalizedGLMPopulation(Population):
         for glm in self.glms:
             glm.bias_prior.set_mu(np.array([self.bias_hyperprior.mu]))
             glm.bias_prior.set_sigma(np.array([np.sqrt(self.bias_hyperprior.sigmasq)]))
-
-
-    def resample(self):
-        super(NormalizedGLMPopulation, self).resample()
-
-        # Resample the hyperpriors
-        self.resample_bias_hyperprior()
 
