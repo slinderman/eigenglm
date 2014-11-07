@@ -75,6 +75,19 @@ namespace nptypes {
     template <typename T>
       using NPRowVectorArray = Map<Array<T,1,Dynamic>,Aligned>;
 #endif
+
+    // Function to check whether two vectors are nearly the same
+    template<typename DerivedA, typename DerivedB>
+    bool allclose(const Eigen::DenseBase<DerivedA>& a,
+                  const Eigen::DenseBase<DerivedB>& b,
+                  const typename DerivedA::RealScalar& rtol
+                      = Eigen::NumTraits<typename DerivedA::RealScalar>::dummy_precision(),
+                  const typename DerivedA::RealScalar& atol
+                      = Eigen::NumTraits<typename DerivedA::RealScalar>::epsilon())
+    {
+      return ((a.derived() - b.derived()).array().abs()
+              <= (atol + rtol * b.derived().array().abs())).all();
+    }
 }
 
 #endif

@@ -80,6 +80,27 @@ MatrixXd LinearImpulseCurrent::compute_current(SpikeTrain* st)
     return I_imp;
 }
 
+MatrixXd LinearImpulseCurrent::compute_current_with_cache(SpikeTrain* st)
+{
+    MatrixXd I_imp(st->T, st->N);
+
+    // Each column of the output matrix is a matrix vector product
+    // of the filtered spike train for neuron n and the impulse
+    // response weights for that connection.
+    for (int n=0; n < st->N; n++)
+    {
+        // Check if the current has been cached
+        if (!allclose(st->cached_I_imp_key[n], w_ir[n]))
+        {
+            // Cache miss. Update the cache.
+            st->cached_I_imp_key[n] = w_ir[n];
+            st->cached_I_imp_val[n] = st->filtered_S[n] * w_ir[n];
+        }
+        I_imp.col(n) = st->cached_I_imp_val[n];
+    }
+    return I_imp;
+}
+
 void LinearImpulseCurrent::get_w(double* w_buffer)
 {
     // Copy the impulse response weights into a buffer
@@ -226,6 +247,27 @@ MatrixXd DirichletImpulseCurrent::compute_current(SpikeTrain* st)
     for (int n=0; n < st->N; n++)
     {
         I_imp.col(n) = st->filtered_S[n] * w_ir[n];
+    }
+    return I_imp;
+}
+
+MatrixXd DirichletImpulseCurrent::compute_current_with_cache(SpikeTrain* st)
+{
+    MatrixXd I_imp(st->T, st->N);
+
+    // Each column of the output matrix is a matrix vector product
+    // of the filtered spike train for neuron n and the impulse
+    // response weights for that connection.
+    for (int n=0; n < st->N; n++)
+    {
+        // Check if the current has been cached
+        if (!allclose(st->cached_I_imp_key[n], w_ir[n]))
+        {
+            // Cache miss. Update the cache.
+            st->cached_I_imp_key[n] = w_ir[n];
+            st->cached_I_imp_val[n] = st->filtered_S[n] * w_ir[n];
+        }
+        I_imp.col(n) = st->cached_I_imp_val[n];
     }
     return I_imp;
 }

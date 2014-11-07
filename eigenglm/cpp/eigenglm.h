@@ -34,10 +34,18 @@ public:
     int D_imp;
     vector<MatrixXd> filtered_S;
 
+    // Cache the currents
+    vector<VectorXd> cached_I_imp_key;
+    vector<VectorXd> cached_I_imp_val;
+
+    vector<VectorXd> cached_I_stim_key;
+    vector<VectorXd> cached_I_stim_val;
+
     SpikeTrain(int N, int T, double dt, VectorXd S, int D_imp, vector<MatrixXd> filtered_S);
 
     // Expose a constructor that uses buffers only, for Python.
     SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vector<double*> filtered_S_buffers);
+
 };
 
 /**
@@ -72,6 +80,9 @@ class BiasCurrent : public Component
     class BiasHmcSampler : public AdaptiveHmcSampler
     {
     BiasCurrent* parent;
+    MatrixXd I_net;
+    MatrixXd I_stim;
+
     public:
         BiasHmcSampler(BiasCurrent* parent,
                        std::default_random_engine rng,
@@ -103,6 +114,7 @@ class ImpulseCurrent : public Component
 {
 public:
     virtual MatrixXd compute_current(SpikeTrain* st) = 0;
+    virtual MatrixXd compute_current_with_cache(SpikeTrain* st) = 0;
 };
 
 class LinearImpulseCurrent : public ImpulseCurrent
@@ -139,6 +151,8 @@ public:
     // Getters and setters
     void set_glm(Glm* glm) { this->glm = glm; }
     MatrixXd compute_current(SpikeTrain* st);
+    MatrixXd compute_current_with_cache(SpikeTrain* st);
+
     void get_w(double* w_buffer);
     void set_w(double* w_buffer);
     double log_probability() {return 0.0; }
@@ -189,6 +203,7 @@ public:
     // Getters and setters
     void set_glm(Glm* glm) { this->glm = glm; }
     MatrixXd compute_current(SpikeTrain* st);
+    MatrixXd compute_current_with_cache(SpikeTrain* st);
     void get_w(double* w_buffer);
     void get_g(double* w_buffer);
     void set_g(double* w_buffer);

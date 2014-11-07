@@ -2,7 +2,7 @@ import time
 import numpy as np
 
 # Set the random seed for reproducability
-# np.random.seed(0)
+np.random.seed(0)
 
 import matplotlib.pyplot as plt
 
@@ -50,7 +50,6 @@ def run():
                                     S=data['S'][:,0],
                                     t=data['dt'] * np.arange(data['T']),
                                     T_slice=slice(int(0.9*data['T']), -1))
-    import pdb; pdb.set_trace()
     # Run some MCMC
     N_iters = 1000
     print "Running ", N_iters, " iterations of MCMC."

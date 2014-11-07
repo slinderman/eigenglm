@@ -5,7 +5,6 @@ likelihood calculation.
 import numpy as np
 from scipy.misc import logsumexp
 
-from hips.plotting.layout import *
 from hips.inference.log_sum_exp import log_sum_exp_sample
 from hips.inference.ars2 import AdaptiveRejectionSampler
 
@@ -20,7 +19,6 @@ class _GLM(object):
     Base class to be subclassed with specific implementations.
     """
     spiketrains = []
-    glm = None
 
     def __init__(self, n, N, population=None):
         """
@@ -67,16 +65,7 @@ class _GLM(object):
         raise NotImplementedError()
 
     def firing_rate(self, data):
-        if isinstance(data, peg.PySpikeTrain):
-            return self.glm.get_firing_rate(data)
-        elif isinstance(data, dict):
-            self.add_data(data)
-            fr = self.glm.get_firing_rate(self.spiketrains[-1])
-            # TODO: Remove from c++ class too
-            self.spiketrains.remove(-1)
-            return fr
-        else:
-            raise Exception("Unrecognized data type!")
+        raise NotImplementedError()
 
     def resample(self):
         raise NotImplementedError()
@@ -181,6 +170,18 @@ class StandardGLM(_GLM):
         self.glm.resample()
 
     # Properties for the GLM state
+    def firing_rate(self, data):
+        if isinstance(data, peg.PySpikeTrain):
+            return self.glm.get_firing_rate(data)
+        elif isinstance(data, dict):
+            self.add_data(data)
+            fr = self.glm.get_firing_rate(self.spiketrains[-1])
+            # TODO: Remove from c++ class too
+            self.spiketrains.remove(-1)
+            return fr
+        else:
+            raise Exception("Unrecognized data type!")
+
     def impulse_response(self, dt):
         dt_max = self.params.impulse.dt_max
         # Get the L x B basis
@@ -206,7 +207,6 @@ class StandardGLM(_GLM):
     def Wn(self):
         # Return the n-th column of W
         return self.network_component.get_W()
-
 
 
 class NormalizedGLM(_GLM):
@@ -429,6 +429,19 @@ class NormalizedGLM(_GLM):
         self.collapsed_sample_AW()
 
     # Properties for the GLM state
+    def firing_rate(self, data):
+        if isinstance(data, peg.PySpikeTrain):
+            return self.glm.get_firing_rate(data)
+        elif isinstance(data, dict):
+            self.add_data(data)
+            fr = self.glm.get_firing_rate(self.spiketrains[-1])
+            # TODO: Remove from c++ class too
+            self.spiketrains.remove(-1)
+            return fr
+        else:
+            raise Exception("Unrecognized data type!")
+
+
     def impulse_response(self, dt):
         dt_max = self.params.impulse.dt_max
         # Get the L x B basis
@@ -455,3 +468,106 @@ class NormalizedGLM(_GLM):
         # Return the n-th column of W
         return self.network_component.get_W()
 
+
+class NegativeBinomialGLM(_GLM):
+    """
+    A GLM with negative binomial observations, based on the Polya-gamma auxiliary
+    variable trick introduced in
+        M. Zhou, L. Li, D. Dunson and L. Carin, "Lognormal and
+        Gamma Mixed Negative Binomial Regression," in ICML 2012.
+
+    and leveraged by
+        Pillow, J. and Scott, J. "Fully-Bayesian inference for neural models with
+        negative-binomial spiking. In NIPS 2013.
+    """
+    def __init__(self, n, N, params):
+        super(NegativeBinomialGLM, self).__init__(n, N)
+        # assert isinstance(params, NegativeBinomialGLMParameters)
+        self.params = params
+
+        # Set up a negative binomial regression class
+
+        # TODO: Create the bias
+
+
+        # TODO: Create the weighted impulse response
+        self.impulse_basis = Basis(params.impulse.basis)
+
+        # TODO: Create a sparse adjacency matrix
+
+        # TODO: Set the dispersion parameter xi
+
+    def add_data(self, data):
+        """
+        Add a data sequence.
+        :param data:
+        :return:
+        """
+        self.check_data(data)
+        N = self.N
+        T = data['T']
+        dt = data['dt']
+        S = data['S']
+        dt_max = self.params.impulse.dt_max
+
+        # Filter the spike train
+        filtered_S = self.impulse_basis.convolve_with_basis(S, dt, dt_max)
+
+        Sn = S[:, self.n].copy(order='C')
+
+        # Create a spike train object and add it to the GLM
+        st = ((N, T, dt, Sn, filtered_S))
+        self.spiketrains.append(st)
+
+    def log_prior(self):
+        return self.glm.log_prior()
+
+    def log_likelihood(self, data=None):
+        return self.glm.log_likelihood()
+
+    def log_probability(self, data=None):
+        return self.glm.log_probability()
+
+    def resample(self):
+        self.glm.resample()
+
+    # Properties for the GLM state
+    def firing_rate(self, data):
+        if isinstance(data, peg.PySpikeTrain):
+            return self.glm.get_firing_rate(data)
+        elif isinstance(data, dict):
+            self.add_data(data)
+
+            # TODO: Compute the firing rate
+            fr = None
+
+            self.spiketrains.remove(-1)
+            return fr
+        else:
+            raise Exception("Unrecognized data type!")
+
+    def impulse_response(self, dt):
+        dt_max = self.params.impulse.dt_max
+        # Get the L x B basis
+        basis = self.impulse_basis.interpolate_basis(dt, dt_max)
+        # The N x B weights
+        weights = self.impulse_component.get_w_ir()
+        return np.dot(weights, basis.T)
+
+    @property
+    def bias(self):
+        return self.bias_component.get_bias()
+
+    @property
+    def w_ir(self):
+        return self.impulse_component.get_w_ir()
+
+    @property
+    def An(self):
+        # Return the n-th column of A
+        return self.network_component.get_A()
+
+    @property
+    def Wn(self):
+        # Return the n-th column of W
+        return self.network_component.get_W()

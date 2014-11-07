@@ -40,6 +40,13 @@ SpikeTrain::SpikeTrain(int N, int T, double dt, double* S_buffer, int D_imp, vec
         MatrixXd fS(T, D_imp);
         fS = np_fS;
         filtered_S.push_back(fS);
+
+        // Initialize the caches
+        cached_I_imp_key.push_back(VectorXd(D_imp));
+        cached_I_imp_val.push_back(VectorXd(T));
+
+        cached_I_stim_key.push_back(VectorXd(D_imp));
+        cached_I_stim_val.push_back(VectorXd(T));
     }
 
     SpikeTrain::initialize(N, T, dt, S, D_imp, filtered_S);
@@ -99,6 +106,16 @@ BiasCurrent::BiasHmcSampler::BiasHmcSampler(BiasCurrent* parent,
 {
     this->parent = parent;
 }
+
+
+double BiasCurrent::BiasHmcSampler::logp(MatrixXd x)
+{
+    // Set the bias
+    parent->I_bias = x(0,0);
+
+    return parent->glm->log_probability();
+}
+
 
 double BiasCurrent::BiasHmcSampler::logp(MatrixXd x)
 {
@@ -254,7 +271,7 @@ void Glm::get_firing_rate(SpikeTrain* s, VectorXd *fr)
     I = I.array() + bias->I_bias;
 
     // Add the weighted impulse responses
-    MatrixXd I_imp = impulse->compute_current(s);
+    MatrixXd I_imp = impulse->compute_current_with_cache(s);
     I += I_imp * (network->A.array() * network->W.array()).matrix();
 
     // Compute the firing rate and its log.

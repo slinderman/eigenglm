@@ -53,6 +53,7 @@ public:
     // Base classes must override these functions
     virtual double logp(MatrixXd x) = 0;
     virtual MatrixXd grad(MatrixXd x) = 0;
+    virtual void preprocess() {}
 
     // Generic sampling method
     void sample(MatrixXd q_curr, MatrixXd* q_next)
