@@ -333,6 +333,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
 
 
+
 def test_nbregression():
     # Make a model
     D = 2
