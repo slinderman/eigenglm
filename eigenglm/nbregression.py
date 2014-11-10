@@ -188,12 +188,13 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
     Note the change of notation from the regular Regression model:
     A -> w
     sigma -> phi
+
+    A is now an indicator
     """
     def __init__(self,
-            mu_bias=None, sigma_bias=None,
-            rho_s=None, mu_ws=None, sigma_ws=None,
-            a_phi=None, b_phi=None,
-            bias=None, As=None, ws=None, phi=None,
+            bias_model, regression_models,
+            rho_s=None, a_phi=None, b_phi=None,
+            As=None, phi=None,
             xi=10,
             pg_truncation=500):
 
@@ -201,27 +202,20 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         self.trunc = pg_truncation
         self.data_list = []
 
-        self.mu_bias = mu_bias
-        self.sigma_bias = sigma_bias
         self.rho_s = rho_s
-        self.mu_ws = mu_ws
-        self.sigma_ws = sigma_ws
         self.a_phi = a_phi
         self.b_phi = b_phi
 
-        self.bias = bias
+        self.bias_model = bias_model
+        self.regression_models = regression_models
         self.As = As
-        self.ws = ws
         self.phi = phi
 
         # For each parameter, make sure it is either specified or given a prior
-        if bias is None:
-            assert not any(_ is None for _ in (mu_bias, sigma_bias))
-            self.resample_bias()
 
-        if As is ws is None:
-            assert not any(_ is None for _ in (rho_s, mu_ws, sigma_ws))
-            self.resample_As_and_ws()
+        if As is None:
+            assert rho_s is not None
+            self.resample_As_and_regression_models()
 
         if phi is None:
             assert not any(_ is None for _ in (a_phi, b_phi))
@@ -229,9 +223,9 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
         # Set the number of inputs
         self.M = len(self.As)
-        assert len(self.ws) == self.M
+        assert len(self.regression_models) == self.M
 
-        self.Ds = np.array([w.size for w in self.ws])
+        self.Ds = np.array([rm.D_in for rm in self.regression_models])
 
     def add_data(self, Xs, counts):
         """
@@ -257,9 +251,9 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         self.data_list.append(augmented_data)
 
     def mu_psi(self, Xs):
-        mu = self.bias
-        for X,A,w in zip(Xs, self.As, self.ws):
-            mu += A * X.dot(w)
+        mu = self.bias_model
+        for X,A,rm in zip(Xs, self.As, self.regression_models):
+            mu += A * rm.predict(X)
 
         return mu
 
@@ -321,6 +315,17 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
         # TODO: Resample the xi's under a gamma prior
 
+    def resample_phi(self):
+        """
+        Resample the noise variance phi.
+
+        :return:
+        """
+
+        # Update the regression model covariances
+        for rm in self.regression_models:
+            rm.sigma = self.phi
+
     def resample_bias(self):
         """
         Resample the bias given the weights and psi
@@ -331,8 +336,37 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         for data in self.data_list:
             psi_resids.append(data.psi - (self.mu_psi(data.X) - self.bias))
 
+        self.bias_model.resample(psi_resids)
 
+    def resample_As_and_regression_models(self):
+        """
+        Jointly resample the spike and slab indicator variables and regression models
+        :return:
+        """
+        # For each regression model, sample the spike and slab variable
+        for m in range(self.M):
+            D = self.Ds[m]
+            rho = self.rho_s[m]
+            rm = self.regression_models[m]
 
+            # Compute residual
+            self.As[m] = 0  # Make sure mu is computed without the current regression model
+            residuals = [d.psi - self.mu_psi(d) for d in self.data_list]
+
+            lp_A = np.zeros(2)
+
+            # Compute log Pr(A=0|...)
+            lp_A[0] = np.log(1.0-rho) + GaussianFixed(0, self.phi).log_likelihood(residuals)
+
+            # Compute log Pr(A=1|...)
+            lp_A[1] = np.log(rho) + rm.log_marginal_likelihood(residuals)
+
+            # Sample the spike variable
+            self.As[m] = log_sum_exp_sample(lp_A)
+
+            # Sample the slab variable
+            if self.As[m]:
+                rm.resample(residuals)
 
 def test_nbregression():
     # Make a model
