@@ -178,23 +178,22 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
 
     ### Collapsed
     def log_marginal_likelihood(self,data):
-        pass
         # The marginal distribution for multivariate Gaussian mean and
         #  fixed covariance is another multivariate Gaussian.
         if isinstance(data, list):
             return np.array([self.log_marginal_likelihood(d) for d in data])
         elif isinstance(data, np.ndarray):
-            X,y = data[:,:-1], data[:,-1]
             N = data.shape[0]
+            X,y = data[:,:-1], data[:,-1].reshape((N,1))
 
             # TODO: Implement this with matrix inversion lemma
             # Compute the marginal distribution parameters
             mu_marg = X.dot(self.mu_A.T)
             # Covariances add
-            Sig_marg = self.sigma * np.eye(N) + X.dot(self.Sigma_A.dot(X.T))
+            Sig_marg = np.asscalar(self.sigma) * np.eye(N) + X.dot(self.Sigma_A.dot(X.T))
 
             # Compute the marginal log likelihood
-            return GaussianFixed(mu_marg, Sig_marg).log_likelihood(y)
+            return GaussianFixed(mu_marg, Sig_marg).log_likelihood(y.T)
         else:
             raise Exception("Data must be list of numpy arrays or numpy array")
 
@@ -501,8 +500,6 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
             else:
                 residuals = []
                 X_and_residuals = []
-
-
 
             # Compute log Pr(A=0|...) and log Pr(A=1|...)
             lp_A = np.zeros(2)

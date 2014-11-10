@@ -9,7 +9,7 @@ def test_ss_nbregression():
     b = np.array([-1.0])
     w = np.ones((1,D))
     # A = np.ones(D)
-    A = np.array([1,1])
+    A = np.array([1,0])
     sigma =  0.1 * np.ones((1,1))
 
     # Make synthetic data
