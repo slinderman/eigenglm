@@ -1,5 +1,5 @@
 import numpy as np
-from eigenglm.nbregression import RegressionFixedCov, SpikeAndSlabNegativeBinomialRegression
+from eigenglm.nbregression import ScalarRegressionFixedCov, SpikeAndSlabNegativeBinomialRegression
 from eigenglm.deps.pybasicbayes.distributions import GaussianFixedCov, GaussianFixedMean
 
 def test_ss_nbregression():
@@ -14,7 +14,7 @@ def test_ss_nbregression():
 
     # Make regression models for each dimension
     true_bias_model = GaussianFixedCov(mu=b, sigma=sigma)
-    true_regression_models = [RegressionFixedCov(A=w[d].reshape((1,)), sigma=sigma) for d in range(D)]
+    true_regression_models = [ScalarRegressionFixedCov(A=w[d].reshape((1,)), sigma=sigma) for d in range(D)]
     true_noise_model  = GaussianFixedMean(mu=np.zeros(1,), sigma=sigma)
     true_model = SpikeAndSlabNegativeBinomialRegression(true_bias_model, true_regression_models, true_noise_model, As=A, xi=xi)
 
@@ -51,7 +51,7 @@ def test_ss_nbregression():
     # Fit with the same model
     inf_noise_model  = GaussianFixedMean(mu=np.zeros(1,), nu_0=1, lmbda_0=np.eye(1))
     inf_bias_model = GaussianFixedCov(mu_0=np.zeros((1,)), lmbda_0=np.ones((1,1)), sigma=inf_noise_model.sigma)
-    inf_regression_models = [RegressionFixedCov(mu_A=np.zeros((1,)),
+    inf_regression_models = [ScalarRegressionFixedCov(mu_A=np.zeros((1,)),
                                                 Sigma_A=np.ones((1,1)),
                                                 sigma=inf_noise_model.sigma)
                              for _ in range(D)]

@@ -60,7 +60,7 @@ class AugmentedNegativeBinomialCounts(GibbsSampling):
         mu_post = sig_post * ((self.counts-xi)/2.0 + mu / sigma)
         self.psi = mu_post + np.sqrt(sig_post) * np.random.normal(size=(self.T,))
 
-class RegressionFixedCov(GibbsSampling, Collapsed):
+class ScalarRegressionFixedCov(GibbsSampling, Collapsed):
     def __init__(self,
                  sigma,
                  mu_A=None, Sigma_A=None,
@@ -161,9 +161,6 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
         # Posterior mean of a Gaussian
         Sigma_A_post = np.linalg.inv(xxT + self.Sigma_A_inv)
         mu_A_post = ((yxT + self.mu_A.dot(self.Sigma_A_inv)).dot(Sigma_A_post)).reshape((self.D_in,))
-
-        # self.A = np.random.multivariate_normal(mu_A_post, Sigma_A_post)
-        # self.A = mu_A_post + np.random.normal(size=(1,self.D_in)).dot(np.linalg.cholesky(Sigma_A_post).T)
         self.A = GaussianFixed(mu_A_post, Sigma_A_post).rvs()[0,:]
 
     ### Prediction

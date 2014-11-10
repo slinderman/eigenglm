@@ -1,6 +1,6 @@
 import numpy as np
 
-from eigenglm.nbregression import RegressionFixedCov
+from eigenglm.nbregression import ScalarRegressionFixedCov
 
 # Make a model
 D = 2
@@ -14,7 +14,7 @@ mu_A = np.zeros((D,))
 eta = 1.0
 Sigma_A = eta * np.eye(D)
 sigma =  0.1
-true_model = RegressionFixedCov(A=A_true, sigma=sigma)
+true_model = ScalarRegressionFixedCov(A=A_true, sigma=sigma)
 
 # Make synthetic data
 T = 100
@@ -36,7 +36,7 @@ plt.colorbar()
 l_true = plt.plot([0, A_true[0]], [0, A_true[1]], ':k')
 
 # Fit the model with a matrix normal prior on A and sigma
-inf_model = RegressionFixedCov(mu_A=mu_A, Sigma_A=Sigma_A, sigma=sigma)
+inf_model = ScalarRegressionFixedCov(mu_A=mu_A, Sigma_A=Sigma_A, sigma=sigma)
 
 # Plot the initial sample
 l_inf = plt.plot([0, inf_model.A[0]], [0, inf_model.A[1]], '-k')
