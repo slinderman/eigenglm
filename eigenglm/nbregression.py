@@ -2,9 +2,13 @@
 Implement a distribution class for negative binomial regression
 """
 import numpy as np
+from numpy import newaxis as na
 from scipy.special import gammaln
 
-from deps.pybasicbayes.distributions import Regression, GibbsSampling, Gaussian
+from deps.pybasicbayes.abstractions import Collapsed
+from deps.pybasicbayes.distributions import Regression, GibbsSampling, GaussianFixed
+from deps.pybasicbayes.util.general import blockarray
+
 from hips.distributions.polya_gamma import polya_gamma
 
 class AugmentedNegativeBinomialCounts(GibbsSampling):
@@ -52,6 +56,144 @@ class AugmentedNegativeBinomialCounts(GibbsSampling):
         sig_post = 1.0 / (1.0/sigma + self.omega)
         mu_post = sig_post * ((self.counts-xi)/2.0 + mu / sigma)
         self.psi = mu_post + np.sqrt(sig_post) * np.random.normal(size=(self.T,))
+
+class RegressionFixedCov(GibbsSampling, Collapsed):
+    def __init__(self,
+                 sigma,
+                 mu_A=None, Sigma_A=None,
+                 affine=False,
+                 A=None):
+
+        self.affine = affine
+        self.sigma = sigma
+        self.A = A
+
+        self.mu_A = mu_A
+        self.Sigma_A = Sigma_A
+
+        if Sigma_A is not None:
+            self.Sigma_A_inv = np.linalg.inv(Sigma_A)
+        else:
+            self.Sigma_A_inv = None
+
+        if A is None and not any(_ is None for _ in (mu_A, Sigma_A)):
+            assert mu_A.ndim == 2
+            self.resample() # initialize from prior
+
+    @property
+    def D_in(self):
+        # NOTE: D_in includes the extra affine coordinate
+        mat = self.A if self.A is not None else self.mu_A
+        return mat.shape[1]
+
+    @property
+    def D_out(self):
+        # For now, assume we are doing scalar regression
+        return 1
+
+    ### getting statistics
+
+    def _get_statistics(self,data):
+        if isinstance(data,list):
+            return sum((self._get_statistics(d) for d in data),self._empty_statistics())
+        else:
+            data = data[~np.isnan(data).any(1)]
+            n, D = data.shape[0], self.D_out
+
+            statmat = data.T.dot(data)
+            xxT, yxT, yyT = statmat[:-D,:-D], statmat[-D:,:-D], statmat[-D:,-D:]
+
+            if self.affine:
+                xy = data.sum(0)
+                x, y = xy[:-D], xy[-D:]
+                xxT = blockarray([[xxT,x[:,na]],[x[na,:],np.atleast_2d(n)]])
+                yxT = np.hstack((yxT,y[:,na]))
+
+            return np.array([yyT, yxT, xxT, n])
+
+    def _empty_statistics(self):
+        return np.array([np.zeros((self.D_out, self.D_out)),
+                         np.zeros((1,self.D_in)),
+                         np.zeros((self.D_in, self.D_in)),
+                         0])
+
+    ### distribution
+
+    def log_likelihood(self,xy):
+        A, sigma, D = self.A, self.sigma, self.D_out
+        x, y = xy[:,:-D], xy[:,-D:]
+
+        if self.affine:
+            A, b = A[:,:-1], A[:,-1]
+            mu_y = x.dot(A.T) + b
+        else:
+            mu_y = x.dot(A.T)
+
+        ll = (-0.5/sigma * (y-mu_y)**2).sum()
+        ll -= -0.5 * np.log(2*np.pi * sigma**2)
+
+        return ll
+
+    def rvs(self,x=None,size=1,return_xy=True):
+        A, sigma = self.A, self.sigma
+
+        if self.affine:
+            A, b = A[:,:-1], A[:,-1]
+
+        x = np.random.normal(size=(size,A.shape[1])) if x is None else x
+        y = x.dot(A.T) + np.sqrt(sigma) * np.random.normal(size=(x.shape[0],self.D_out))
+
+        if self.affine:
+            y += b.T
+
+        return np.hstack((x,y)) if return_xy else y
+
+    ### Gibbs sampling
+
+    def resample(self,data=[],stats=None):
+        ss = self._get_statistics(data) if stats is None else stats
+        yxT = ss[1]
+        xxT = ss[2]
+
+        # Posterior mean of a Gaussian
+        Sigma_A_post = np.linalg.inv(xxT + self.Sigma_A_inv)
+        mu_A_post = (yxT + self.mu_A.dot(self.Sigma_A_inv)).dot(Sigma_A_post)
+
+        # self.A = np.random.multivariate_normal(mu_A_post, Sigma_A_post)
+        self.A = mu_A_post + np.random.normal(size=(1,self.D_in)).dot(np.linalg.cholesky(Sigma_A_post).T)
+
+    ### Prediction
+    def predict(self, X):
+        A, sigma = self.A, self.sigma
+        if self.affine:
+            A, b = A[:,:-1], A[:,-1]
+
+        y = X.dot(A.T)
+        if self.affine:
+            y += b.T
+        return y
+
+    ### Collapsed
+    def log_marginal_likelihood(self,data):
+        pass
+        # The marginal distribution for multivariate Gaussian mean and
+        #  fixed covariance is another multivariate Gaussian.
+        if isinstance(data, list):
+            return [self.log_marginal_likelihood(d) for d in data]
+        elif isinstance(data, np.ndarray):
+            X,y = data[:,:-1], data[:,-1]
+            N = data.shape[0]
+
+            # TODO: Implement this with matrix inversion lemma
+            # Compute the marginal distribution parameters
+            mu_marg = X.dot(self.mu_A.T)
+            # Covariances add
+            Sig_marg = self.sigma * np.eye(N) + X.dot(self.Sigma_A.dot(X.T))
+
+            # Compute the marginal log likelihood
+            return GaussianFixed(mu_marg, Sig_marg).log_likelihood(y)
+        else:
+            raise Exception("Data must be list of numpy arrays or numpy array")
 
 
 class NegativeBinomialRegression(Regression):
