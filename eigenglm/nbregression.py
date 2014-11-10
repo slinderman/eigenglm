@@ -6,7 +6,7 @@ from numpy import newaxis as na
 from scipy.special import gammaln
 
 from deps.pybasicbayes.abstractions import Collapsed
-from deps.pybasicbayes.distributions import Regression, GibbsSampling, GaussianFixed
+from deps.pybasicbayes.distributions import Regression, GibbsSampling, GaussianFixed, GaussianFixedMean
 from deps.pybasicbayes.util.general import blockarray
 from deps.pybasicbayes.util.stats import sample_discrete_from_log
 
@@ -337,9 +337,9 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
     A is now an indicator
     """
     def __init__(self,
-            bias_model, regression_models,
-            rho_s=None, a_sigma=None, b_sigma=None,
-            As=None, sigma=None,
+            bias_model, regression_models, sigma_model,
+            rho_s=None,
+            As=None,
             xi=10,
             pg_truncation=500):
 
@@ -348,13 +348,11 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         self.data_list = []
 
         self.rho_s = rho_s
-        self.a_phi = a_sigma
-        self.b_phi = b_sigma
 
         self.bias_model = bias_model
         self.regression_models = regression_models
+        self.sigma_model = sigma_model
         self.As = As
-        self.sigma = sigma
 
         # Set the number of inputs
         self.M = self.As.size if self.As is not None else self.rho_s.size
@@ -366,15 +364,19 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
             self.As = np.ones(self.M)
             self.resample_As_and_regression_models()
 
-        if sigma is None:
-            assert not any(_ is None for _ in (a_sigma, b_sigma))
-            self.resample_sigma()
-
-        # Set phi for each regression model
+        # Set noise variance for each regression model
         for rm in self.regression_models:
-            rm.sigma = self.sigma
+            rm.sigma = self.sigma_model.sigma
 
         self.Ds = np.array([rm.D_in for rm in self.regression_models])
+
+    @property
+    def sigma(self):
+        return self.sigma_model.sigma
+
+    @property
+    def bias(self):
+        return self.bias_model.mu
 
     def add_data(self, Xs, counts):
         """
@@ -422,7 +424,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         return ll
 
     def rvs(self, Xs=None, size=1, return_xy=True):
-        sigma = np.asscalar(self.sigma)
+        sigma = np.asscalar(self.sigma_model.sigma)
         if Xs is None:
             T = size
             Xs = []
@@ -458,6 +460,9 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         self.resample_bias()
         self.resample_As_and_regression_models()
 
+        # Resample the noise variance sigma
+        self.resample_sigma()
+
         # TODO: Resample the xi's under a gamma prior
 
     def resample_sigma(self):
@@ -467,9 +472,15 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         :return:
         """
 
+        residuals = []
+        for data in self.data_list:
+            residuals.append((data.psi - self.mu_psi(data.X))[:,None])
+
+        self.sigma_model.resample(residuals)
+
         # Update the regression model covariances
         for rm in self.regression_models:
-            rm.sigma = self.sigma
+            rm.sigma = self.sigma_model.sigma
 
     def resample_bias(self):
         """
@@ -506,7 +517,8 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
             # Compute log Pr(A=0|...) and log Pr(A=1|...)
             lp_A = np.zeros(2)
-            lp_A[0] = np.log(1.0-rho) + GaussianFixed(np.array([0]), self.sigma).log_likelihood(residuals).sum()
+            lp_A[0] = np.log(1.0-rho) + GaussianFixed(np.array([0]), self.sigma_model.sigma)\
+                                            .log_likelihood(residuals).sum()
             lp_A[1] = np.log(rho) + rm.log_marginal_likelihood(X_and_residuals).sum()
 
             # Sample the spike variable

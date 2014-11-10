@@ -1,6 +1,6 @@
 import numpy as np
 from eigenglm.nbregression import RegressionFixedCov, SpikeAndSlabNegativeBinomialRegression
-from eigenglm.deps.pybasicbayes.distributions import GaussianFixedCov
+from eigenglm.deps.pybasicbayes.distributions import GaussianFixedCov, GaussianFixedMean
 
 def test_ss_nbregression():
     # Make a model
@@ -9,14 +9,14 @@ def test_ss_nbregression():
     b = np.array([-1.0])
     w = np.ones((D,))
     # A = np.ones(D)
-    A = np.array([1,1])
+    A = np.array([1,0])
     sigma =  0.1 * np.ones((1,1))
-
 
     # Make regression models for each dimension
     true_bias_model = GaussianFixedCov(mu=b, sigma=sigma)
     true_regression_models = [RegressionFixedCov(A=w[d].reshape((1,)), sigma=sigma) for d in range(D)]
-    true_model = SpikeAndSlabNegativeBinomialRegression(true_bias_model, true_regression_models, As=A, sigma=sigma, xi=xi)
+    true_noise_model  = GaussianFixedMean(mu=np.zeros(1,), sigma=sigma)
+    true_model = SpikeAndSlabNegativeBinomialRegression(true_bias_model, true_regression_models, true_noise_model, As=A, xi=xi)
 
     # Make synthetic data
     datasets = 10
@@ -49,10 +49,15 @@ def test_ss_nbregression():
 
 
     # Fit with the same model
-    inf_bias_model = GaussianFixedCov(mu_0=np.zeros((1,)), lmbda_0=np.ones((1,1)), sigma=sigma)
-    inf_regression_models = [RegressionFixedCov(mu_A=np.zeros((1,)), Sigma_A=np.ones((1,1)), sigma=sigma) for d in range(D)]
-    inf_model = SpikeAndSlabNegativeBinomialRegression(inf_bias_model, inf_regression_models,
-                                                       rho_s=0.5*np.ones(D), sigma=sigma, xi=xi)
+    inf_noise_model  = GaussianFixedMean(mu=np.zeros(1,), nu_0=1, lmbda_0=np.eye(1))
+    inf_bias_model = GaussianFixedCov(mu_0=np.zeros((1,)), lmbda_0=np.ones((1,1)), sigma=inf_noise_model.sigma)
+    inf_regression_models = [RegressionFixedCov(mu_A=np.zeros((1,)),
+                                                Sigma_A=np.ones((1,1)),
+                                                sigma=inf_noise_model.sigma)
+                             for _ in range(D)]
+
+    inf_model = SpikeAndSlabNegativeBinomialRegression(inf_bias_model, inf_regression_models, inf_noise_model,
+                                                       rho_s=0.5*np.ones(D), xi=xi)
 
     # Add data
     for Xs,y in zip(Xss, ys):
@@ -71,11 +76,12 @@ def test_ss_nbregression():
         inf_model.resample()
         print "ll:\t", inf_model.log_likelihood(Xs, y)
         print "A:\t", inf_model.As
-        print "bias:\t", inf_bias_model.mu
-        # print "sig:\t", inf_model.sigma
+        print "bias:\t", inf_model.bias
+        print "sigma:\t", inf_model.sigma
 
         l_inf[0].set_data([0, inf_model.As[0] * inf_regression_models[0].A[0]],
                           [0, inf_model.As[1] * inf_regression_models[1].A[0]])
         plt.pause(0.1)
+
 
 test_ss_nbregression()
