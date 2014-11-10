@@ -8,6 +8,7 @@ from scipy.special import gammaln
 from deps.pybasicbayes.abstractions import Collapsed
 from deps.pybasicbayes.distributions import Regression, GibbsSampling, GaussianFixed
 from deps.pybasicbayes.util.general import blockarray
+from deps.pybasicbayes.util.stats import sample_discrete_from_log
 
 from hips.distributions.polya_gamma import polya_gamma
 
@@ -18,7 +19,7 @@ class AugmentedNegativeBinomialCounts(GibbsSampling):
     """
     def __init__(self, X, counts, nbmodel):
         # Data must be a T x (D_in + 1) matrix where the last column contains the counts
-        assert counts.ndim == 1
+        assert counts.ndim <= 2
         self.counts = counts
         self.T = counts.shape[0]
 
@@ -50,12 +51,14 @@ class AugmentedNegativeBinomialCounts(GibbsSampling):
         # import pdb; pdb.set_trace()
         sigma = np.asscalar(sigma)
         # Resample the auxiliary variables, omega
-        self.omega = polya_gamma(self.counts+xi, self.psi, trunc)
+        self.omega = polya_gamma(self.counts.reshape(self.T)+xi,
+                                 self.psi.reshape(self.T),
+                                 trunc).reshape((self.T,1))
 
         # Resample the rates, psi given omega and the regression parameters
         sig_post = 1.0 / (1.0/sigma + self.omega)
         mu_post = sig_post * ((self.counts-xi)/2.0 + mu / sigma)
-        self.psi = mu_post + np.sqrt(sig_post) * np.random.normal(size=(self.T,))
+        self.psi = mu_post + np.sqrt(sig_post) * np.random.normal(size=(self.T,1))
 
 class RegressionFixedCov(GibbsSampling, Collapsed):
     def __init__(self,
@@ -179,7 +182,7 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
         # The marginal distribution for multivariate Gaussian mean and
         #  fixed covariance is another multivariate Gaussian.
         if isinstance(data, list):
-            return [self.log_marginal_likelihood(d) for d in data]
+            return np.array([self.log_marginal_likelihood(d) for d in data])
         elif isinstance(data, np.ndarray):
             X,y = data[:,:-1], data[:,-1]
             N = data.shape[0]
@@ -229,7 +232,7 @@ class NegativeBinomialRegression(Regression):
 
     def mu_psi(self, X):
         T = X.shape[0]
-        return np.dot(X, self.A.T).reshape((T,))
+        return np.dot(X, self.A.T).reshape((T,1))
 
     def add_data(self, X, counts):
         """
@@ -247,7 +250,7 @@ class NegativeBinomialRegression(Regression):
         assert counts.ndim == 1 and counts.size == T
 
         assert np.all(counts >= 0)
-        counts = counts.astype(np.int)
+        counts = counts.reshape((T,1)).astype(np.int)
 
         # Create an augmented counts object
         augmented_data = AugmentedNegativeBinomialCounts(X, counts, self)
@@ -300,7 +303,7 @@ class NegativeBinomialRegression(Regression):
         if len(self.data_list) > 0:
             # Concatenate the X's and psi's
             X = np.vstack([data.X for data in self.data_list])
-            psi = np.vstack([data.psi[:,None] for data in self.data_list])
+            psi = np.vstack([data.psi for data in self.data_list])
 
             # Resample the Gaussian linear regression given the psi's and the X's as data
             super(NegativeBinomialRegression, self).resample(np.hstack([X, psi]))
@@ -322,21 +325,20 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
     where:
 
-    bias ~ Normal(mu_bias, sigma_bias)
+    bias ~ GaussianFixedCov(mu_bias, sigma_bias, sigma)
     A_m ~ Bernoulli(rho_m)
-    w_m ~ Normal(mu_m, sigma_m)
-    phi ~ InvGamma(a_phi, b_phi)
+    w_m ~ RegressionFixedCov(mu_w, Sigma_w, sigma)
+    sigma ~ InvGamma(a_sigma, b_sigma)
 
     Note the change of notation from the regular Regression model:
     A -> w
-    sigma -> phi
 
     A is now an indicator
     """
     def __init__(self,
             bias_model, regression_models,
-            rho_s=None, a_phi=None, b_phi=None,
-            As=None, phi=None,
+            rho_s=None, a_sigma=None, b_sigma=None,
+            As=None, sigma=None,
             xi=10,
             pg_truncation=500):
 
@@ -345,27 +347,31 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         self.data_list = []
 
         self.rho_s = rho_s
-        self.a_phi = a_phi
-        self.b_phi = b_phi
+        self.a_phi = a_sigma
+        self.b_phi = b_sigma
 
         self.bias_model = bias_model
         self.regression_models = regression_models
         self.As = As
-        self.phi = phi
-
-        # For each parameter, make sure it is either specified or given a prior
-
-        if As is None:
-            assert rho_s is not None
-            self.resample_As_and_regression_models()
-
-        if phi is None:
-            assert not any(_ is None for _ in (a_phi, b_phi))
-            self.resample_phi()
+        self.sigma = sigma
 
         # Set the number of inputs
-        self.M = len(self.As)
+        self.M = self.As.size if self.As is not None else self.rho_s.size
         assert len(self.regression_models) == self.M
+
+        # For each parameter, make sure it is either specified or given a prior
+        if As is None:
+            assert rho_s is not None
+            self.As = np.ones(self.M)
+            self.resample_As_and_regression_models()
+
+        if sigma is None:
+            assert not any(_ is None for _ in (a_sigma, b_sigma))
+            self.resample_sigma()
+
+        # Set phi for each regression model
+        for rm in self.regression_models:
+            rm.sigma = self.sigma
 
         self.Ds = np.array([rm.D_in for rm in self.regression_models])
 
@@ -379,9 +385,9 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         :param data:
         :return:
         """
-        assert counts.ndim == 1 and np.all(counts >= 0)
+        assert counts.ndim < 2 and np.all(counts >= 0)
         T = counts.shape[0]
-        counts = counts.astype(np.int)
+        counts = counts.reshape((T,1)).astype(np.int)
 
         assert len(Xs) == self.M
         for D,X in zip(self.Ds, Xs):
@@ -389,11 +395,13 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
             assert X.ndim == 2 and X.shape == (T,D)
 
         # Create an augmented counts object
-        augmented_data = AugmentedNegativeBinomialCounts(Xs, counts)
+        augmented_data = AugmentedNegativeBinomialCounts(Xs, counts, self)
         self.data_list.append(augmented_data)
 
     def mu_psi(self, Xs):
-        mu = self.bias_model
+        T = Xs[0].shape[0]
+        mu = np.zeros((T,1))
+        mu += self.bias_model.mu
         for X,A,rm in zip(Xs, self.As, self.regression_models):
             mu += A * rm.predict(X)
 
@@ -413,7 +421,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         return ll
 
     def rvs(self, Xs=None, size=1, return_xy=True):
-
+        sigma = np.asscalar(self.sigma)
         if Xs is None:
             T = size
             Xs = []
@@ -424,7 +432,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
             Ts = np.array([X.shape[0] for X in Xs])
             assert np.all(Ts == T)
 
-        psi = self.mu_psi(Xs) + np.sqrt(self.phi) * np.random.normal(size=(T,))
+        psi = self.mu_psi(Xs) + np.sqrt(sigma) * np.random.normal(size=(T,1))
 
         # Convert the psi's into the negative binomial rate parameter, p
         p = np.exp(psi) / (1.0 + np.exp(psi))
@@ -433,7 +441,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         # backward in the Numpy implementation
         y = np.random.negative_binomial(self.xi, 1.0-p)
 
-        return Xs,y if return_xy else y
+        return (Xs,y) if return_xy else y
 
     ### Gibbs sampling
 
@@ -443,21 +451,15 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
         for augmented_data in self.data_list:
             # Sample omega given the data and the psi's derived from A, sigma, and X
-            augmented_data.resample(self.xi, self.A, self.sigma)
+            augmented_data.resample()
 
-        if len(self.data_list) > 0:
-            # Concatenate the X's and psi's
-            X = np.vstack([data.X for data in self.data_list])
-            psi = np.vstack([data.psi[:,None] for data in self.data_list])
-
-            # Resample the Gaussian linear regression given the psi's and the X's as data
-            super(NegativeBinomialRegression, self).resample(np.hstack([X, psi]))
-        else:
-            super(NegativeBinomialRegression, self).resample()
+        # Resample the bias model and the regression models
+        self.resample_bias()
+        self.resample_As_and_regression_models()
 
         # TODO: Resample the xi's under a gamma prior
 
-    def resample_phi(self):
+    def resample_sigma(self):
         """
         Resample the noise variance phi.
 
@@ -466,19 +468,18 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
         # Update the regression model covariances
         for rm in self.regression_models:
-            rm.sigma = self.phi
+            rm.sigma = self.sigma
 
     def resample_bias(self):
         """
         Resample the bias given the weights and psi
         :return:
         """
-
-        psi_resids = []
+        residuals = []
         for data in self.data_list:
-            psi_resids.append(data.psi - (self.mu_psi(data.X) - self.bias))
-
-        self.bias_model.resample(psi_resids)
+            residuals.append(data.psi - (self.mu_psi(data.X) - self.bias_model.mu))
+        residuals = np.concatenate(residuals)
+        self.bias_model.resample(residuals)
 
     def resample_As_and_regression_models(self):
         """
@@ -487,78 +488,34 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         """
         # For each regression model, sample the spike and slab variable
         for m in range(self.M):
-            D = self.Ds[m]
             rho = self.rho_s[m]
             rm = self.regression_models[m]
 
             # Compute residual
             self.As[m] = 0  # Make sure mu is computed without the current regression model
-            residuals = [d.psi - self.mu_psi(d) for d in self.data_list]
+            if len(self.data_list) > 0:
+                residuals = np.vstack([d.psi - self.mu_psi(d.X) for d in self.data_list])
+                Xs = np.vstack([d.X[m] for d in self.data_list])
+                # X_and_residuals = [np.hstack((X,residual)) for X,residual in zip(Xs, residuals)]
+                X_and_residuals = np.hstack((Xs,residuals))
+            else:
+                residuals = []
+                X_and_residuals = []
 
+
+
+            # Compute log Pr(A=0|...) and log Pr(A=1|...)
             lp_A = np.zeros(2)
-
-            # Compute log Pr(A=0|...)
-            lp_A[0] = np.log(1.0-rho) + GaussianFixed(0, self.phi).log_likelihood(residuals)
-
-            # Compute log Pr(A=1|...)
-            lp_A[1] = np.log(rho) + rm.log_marginal_likelihood(residuals)
+            lp_A[0] = np.log(1.0-rho) + GaussianFixed(np.array([[0]]), self.sigma).log_likelihood(residuals).sum()
+            lp_A[1] = np.log(rho) + rm.log_marginal_likelihood(X_and_residuals).sum()
 
             # Sample the spike variable
-            self.As[m] = log_sum_exp_sample(lp_A)
+            # self.As[m] = log_sum_exp_sample(lp_A)
+            self.As[m] = sample_discrete_from_log(lp_A)
 
             # Sample the slab variable
             if self.As[m]:
-                rm.resample(residuals)
+                rm.resample(X_and_residuals)
 
-def test_nbregression():
-    # Make a model
-    D = 2
-    xi = 10
-    b = -1.0
-    A = np.ones((1,D+1))
-    A[0,-1] = b
-
-    sigma =  0.001 * np.ones((1,1))
-    true_model = NegativeBinomialRegression(A=A, sigma=sigma, xi=xi)
-
-    # Make synthetic data
-    T = 100
-    X = np.random.normal(size=(T,D))
-    X = np.hstack((X, b*np.ones((T,1))))
-    y = true_model.rvs(X, return_xy=False).reshape((T,))
-
-    psi = X.dot(A.T)
-    print "Max Psi:\t", np.amax(psi)
-    print "Max p:\t", np.amax(np.exp(psi)/(1.0 + np.exp(psi)))
-    print "Max y:\t", np.amax(y)
-
-    # Scatter the data
-    import matplotlib.pyplot as plt
-    plt.figure()
-    plt.gca().set_aspect('equal')
-    plt.scatter(X[:,0], X[:,1], c=y, cmap='hot')
-    plt.colorbar()
-    plt.show()
-
-    # Fit the model with a matrix normal prior on A and sigma
-    nu = D+1
-    M = np.zeros((1,D+1))
-    S = np.eye(1)
-    K = np.eye(D+1)
-    inf_model = NegativeBinomialRegression(nu_0=nu, S_0=S, M_0=M, K_0=K, xi=xi)
-
-    # Add data
-    inf_model.add_data(X, y)
-
-    # MCMC
-    for i in range(100):
-        inf_model.resample()
-        print "ll:\t", inf_model.log_likelihood(X, y)
-        print "A:\t", inf_model.A
-        print "sig:\t", inf_model.sigma
-
-
-
-test_nbregression()
 
 
