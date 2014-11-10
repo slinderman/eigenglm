@@ -19,7 +19,7 @@ class AugmentedNegativeBinomialCounts(GibbsSampling):
     """
     def __init__(self, X, counts, nbmodel):
         # Data must be a T x (D_in + 1) matrix where the last column contains the counts
-        assert counts.ndim <= 2
+        assert counts.ndim == 1
         self.counts = counts
         self.T = counts.shape[0]
 
@@ -53,12 +53,12 @@ class AugmentedNegativeBinomialCounts(GibbsSampling):
         # Resample the auxiliary variables, omega
         self.omega = polya_gamma(self.counts.reshape(self.T)+xi,
                                  self.psi.reshape(self.T),
-                                 trunc).reshape((self.T,1))
+                                 trunc).reshape((self.T,))
 
         # Resample the rates, psi given omega and the regression parameters
         sig_post = 1.0 / (1.0/sigma + self.omega)
         mu_post = sig_post * ((self.counts-xi)/2.0 + mu / sigma)
-        self.psi = mu_post + np.sqrt(sig_post) * np.random.normal(size=(self.T,1))
+        self.psi = mu_post + np.sqrt(sig_post) * np.random.normal(size=(self.T,))
 
 class RegressionFixedCov(GibbsSampling, Collapsed):
     def __init__(self,
@@ -80,14 +80,14 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
             self.Sigma_A_inv = None
 
         if A is None and not any(_ is None for _ in (mu_A, Sigma_A)):
-            assert mu_A.ndim == 2
+            assert mu_A.ndim == 1
             self.resample() # initialize from prior
 
     @property
     def D_in(self):
         # NOTE: D_in includes the extra affine coordinate
         mat = self.A if self.A is not None else self.mu_A
-        return mat.shape[1]
+        return mat.shape[0]
 
     @property
     def D_out(self):
@@ -127,7 +127,7 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
         x, y = xy[:,:-D], xy[:,-D:]
 
         if self.affine:
-            A, b = A[:,:-1], A[:,-1]
+            A, b = A[:-1], A[-1]
             mu_y = x.dot(A.T) + b
         else:
             mu_y = x.dot(A.T)
@@ -141,15 +141,15 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
         A, sigma = self.A, self.sigma
 
         if self.affine:
-            A, b = A[:,:-1], A[:,-1]
+            A, b = A[:-1], A[-1]
 
         x = np.random.normal(size=(size,A.shape[1])) if x is None else x
-        y = x.dot(A.T) + np.sqrt(sigma) * np.random.normal(size=(x.shape[0],self.D_out))
+        y = x.dot(A.T) + np.sqrt(sigma) * np.random.normal(size=(x.shape[0],))
 
         if self.affine:
             y += b.T
 
-        return np.hstack((x,y)) if return_xy else y
+        return np.hstack((x,y[:,None])) if return_xy else y
 
     ### Gibbs sampling
 
@@ -160,20 +160,22 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
 
         # Posterior mean of a Gaussian
         Sigma_A_post = np.linalg.inv(xxT + self.Sigma_A_inv)
-        mu_A_post = (yxT + self.mu_A.dot(self.Sigma_A_inv)).dot(Sigma_A_post)
+        mu_A_post = ((yxT + self.mu_A.dot(self.Sigma_A_inv)).dot(Sigma_A_post)).reshape((self.D_in,))
 
         # self.A = np.random.multivariate_normal(mu_A_post, Sigma_A_post)
-        self.A = mu_A_post + np.random.normal(size=(1,self.D_in)).dot(np.linalg.cholesky(Sigma_A_post).T)
+        # self.A = mu_A_post + np.random.normal(size=(1,self.D_in)).dot(np.linalg.cholesky(Sigma_A_post).T)
+        self.A = GaussianFixed(mu_A_post, Sigma_A_post).rvs()[0,:]
 
     ### Prediction
     def predict(self, X):
         A, sigma = self.A, self.sigma
         if self.affine:
-            A, b = A[:,:-1], A[:,-1]
+            A, b = A[:-1], A[-1]
 
         y = X.dot(A.T)
         if self.affine:
             y += b.T
+
         return y
 
     ### Collapsed
@@ -184,16 +186,16 @@ class RegressionFixedCov(GibbsSampling, Collapsed):
             return np.array([self.log_marginal_likelihood(d) for d in data])
         elif isinstance(data, np.ndarray):
             N = data.shape[0]
-            X,y = data[:,:-1], data[:,-1].reshape((N,1))
+            X,y = data[:,:-1], data[:,-1]
 
             # TODO: Implement this with matrix inversion lemma
             # Compute the marginal distribution parameters
-            mu_marg = X.dot(self.mu_A.T)
+            mu_marg = X.dot(self.mu_A.T).reshape((N,))
             # Covariances add
             Sig_marg = np.asscalar(self.sigma) * np.eye(N) + X.dot(self.Sigma_A.dot(X.T))
 
             # Compute the marginal log likelihood
-            return GaussianFixed(mu_marg, Sig_marg).log_likelihood(y.T)
+            return GaussianFixed(mu_marg, Sig_marg).log_likelihood(y)
         else:
             raise Exception("Data must be list of numpy arrays or numpy array")
 
@@ -231,7 +233,7 @@ class NegativeBinomialRegression(Regression):
 
     def mu_psi(self, X):
         T = X.shape[0]
-        return np.dot(X, self.A.T).reshape((T,1))
+        return np.dot(X, self.A.T).reshape((T,))
 
     def add_data(self, X, counts):
         """
@@ -249,7 +251,7 @@ class NegativeBinomialRegression(Regression):
         assert counts.ndim == 1 and counts.size == T
 
         assert np.all(counts >= 0)
-        counts = counts.reshape((T,1)).astype(np.int)
+        counts = counts.astype(np.int)
 
         # Create an augmented counts object
         augmented_data = AugmentedNegativeBinomialCounts(X, counts, self)
@@ -302,7 +304,7 @@ class NegativeBinomialRegression(Regression):
         if len(self.data_list) > 0:
             # Concatenate the X's and psi's
             X = np.vstack([data.X for data in self.data_list])
-            psi = np.vstack([data.psi for data in self.data_list])
+            psi = np.vstack([data.psi[:,None] for data in self.data_list])
 
             # Resample the Gaussian linear regression given the psi's and the X's as data
             super(NegativeBinomialRegression, self).resample(np.hstack([X, psi]))
@@ -384,9 +386,9 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         :param data:
         :return:
         """
-        assert counts.ndim < 2 and np.all(counts >= 0)
+        assert counts.ndim == 1 and np.all(counts >= 0)
         T = counts.shape[0]
-        counts = counts.reshape((T,1)).astype(np.int)
+        counts = counts.astype(np.int)
 
         assert len(Xs) == self.M
         for D,X in zip(self.Ds, Xs):
@@ -399,7 +401,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
 
     def mu_psi(self, Xs):
         T = Xs[0].shape[0]
-        mu = np.zeros((T,1))
+        mu = np.zeros((T,))
         mu += self.bias_model.mu
         for X,A,rm in zip(Xs, self.As, self.regression_models):
             mu += A * rm.predict(X)
@@ -431,7 +433,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
             Ts = np.array([X.shape[0] for X in Xs])
             assert np.all(Ts == T)
 
-        psi = self.mu_psi(Xs) + np.sqrt(sigma) * np.random.normal(size=(T,1))
+        psi = self.mu_psi(Xs) + np.sqrt(sigma) * np.random.normal(size=(T,))
 
         # Convert the psi's into the negative binomial rate parameter, p
         p = np.exp(psi) / (1.0 + np.exp(psi))
@@ -478,7 +480,9 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
         for data in self.data_list:
             residuals.append(data.psi - (self.mu_psi(data.X) - self.bias_model.mu))
         residuals = np.concatenate(residuals)
-        self.bias_model.resample(residuals)
+
+        # Residuals must be a Nx1 vector
+        self.bias_model.resample(residuals[:,None])
 
     def resample_As_and_regression_models(self):
         """
@@ -493,17 +497,16 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
             # Compute residual
             self.As[m] = 0  # Make sure mu is computed without the current regression model
             if len(self.data_list) > 0:
-                residuals = np.vstack([d.psi - self.mu_psi(d.X) for d in self.data_list])
-                Xs = np.vstack([d.X[m] for d in self.data_list])
-                # X_and_residuals = [np.hstack((X,residual)) for X,residual in zip(Xs, residuals)]
-                X_and_residuals = np.hstack((Xs,residuals))
+                residuals = [(d.psi - self.mu_psi(d.X))[:,None] for d in self.data_list]
+                Xs = [d.X[m] for d in self.data_list]
+                X_and_residuals = [np.hstack((X,residual)) for X,residual in zip(Xs, residuals)]
             else:
                 residuals = []
                 X_and_residuals = []
 
             # Compute log Pr(A=0|...) and log Pr(A=1|...)
             lp_A = np.zeros(2)
-            lp_A[0] = np.log(1.0-rho) + GaussianFixed(np.array([[0]]), self.sigma).log_likelihood(residuals).sum()
+            lp_A[0] = np.log(1.0-rho) + GaussianFixed(np.array([0]), self.sigma).log_likelihood(residuals).sum()
             lp_A[1] = np.log(rho) + rm.log_marginal_likelihood(X_and_residuals).sum()
 
             # Sample the spike variable
