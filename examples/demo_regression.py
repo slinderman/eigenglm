@@ -9,7 +9,8 @@ b = -1.0
 A = np.ones((D+1,))
 A[-1] = b
 
-A_true = np.ones((D,))
+# A_true = np.ones((D,))
+A_true = np.array([0,1])
 mu_A = np.zeros((D,))
 eta = 1.0
 Sigma_A = eta * np.eye(D)

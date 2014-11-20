@@ -505,18 +505,24 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
             # Compute residual
             self.As[m] = 0  # Make sure mu is computed without the current regression model
             if len(self.data_list) > 0:
-                residuals = [(d.psi - self.mu_psi(d.X))[:,None] for d in self.data_list]
-                Xs = [d.X[m] for d in self.data_list]
-                X_and_residuals = [np.hstack((X,residual)) for X,residual in zip(Xs, residuals)]
-            else:
-                residuals = []
-                X_and_residuals = []
+                residuals = np.vstack([(d.psi - self.mu_psi(d.X))[:,None] for d in self.data_list])
+                Xs = np.vstack([d.X[m] for d in self.data_list])
+                X_and_residuals = np.hstack((Xs,residuals))
 
-            # Compute log Pr(A=0|...) and log Pr(A=1|...)
-            lp_A = np.zeros(2)
-            lp_A[0] = np.log(1.0-rho) + GaussianFixed(np.array([0]), self.sigma_model.sigma)\
-                                            .log_likelihood(residuals).sum()
-            lp_A[1] = np.log(rho) + rm.log_marginal_likelihood(X_and_residuals).sum()
+                # Compute log Pr(A=0|...) and log Pr(A=1|...)
+                lp_A = np.zeros(2)
+                lp_A[0] = np.log(1.0-rho) + GaussianFixed(np.array([0]), self.sigma_model.sigma)\
+                                                .log_likelihood(residuals).sum()
+                lp_A[1] = np.log(rho) + rm.log_marginal_likelihood(X_and_residuals).sum()
+
+            else:
+                # Compute log Pr(A=0|...) and log Pr(A=1|...)
+                lp_A = np.zeros(2)
+                lp_A[0] = np.log(1.0-rho)
+                lp_A[1] = np.log(rho)
+
+                X_and_residuals = np.zeros((0, rm.D_in+1))
+
 
             # Sample the spike variable
             # self.As[m] = log_sum_exp_sample(lp_A)

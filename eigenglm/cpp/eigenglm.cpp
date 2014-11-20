@@ -116,15 +116,6 @@ double BiasCurrent::BiasHmcSampler::logp(MatrixXd x)
     return parent->glm->log_probability();
 }
 
-
-double BiasCurrent::BiasHmcSampler::logp(MatrixXd x)
-{
-    // Set the bias
-    parent->I_bias = x(0,0);
-
-    return parent->glm->log_probability();
-}
-
 MatrixXd BiasCurrent::BiasHmcSampler::grad(MatrixXd x)
 {
     // Set the bias

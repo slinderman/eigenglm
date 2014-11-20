@@ -2,6 +2,7 @@
 # distutils: sources = eigenglm/cpp/eigenglm.cpp eigenglm/cpp/impulse.cpp
 # distutils: libraries = stdc++
 # distutils: extra_compile_args = -std=c++11
+# distutils: include_dirs = eigenglm/deps/Eigen3/
 
 import numpy as np
 cimport numpy as np

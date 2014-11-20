@@ -19,7 +19,7 @@ def test_ss_nbregression():
     true_model = SpikeAndSlabNegativeBinomialRegression(true_bias_model, true_regression_models, true_noise_model, As=A, xi=xi)
 
     # Make synthetic data
-    datasets = 10
+    datasets = 1
     Xss = []
     ys = []
     T = 100
