@@ -14,7 +14,7 @@ def test_nbregression():
     true_model = NegativeBinomialRegression(A=A, sigma=sigma, xi=xi)
 
     # Make synthetic data
-    T = 100
+    T = 10000
     X = np.random.normal(size=(T,D))
     X = np.hstack((X, b*np.ones((T,1))))
     y = true_model.rvs(X, return_xy=False).reshape((T,))

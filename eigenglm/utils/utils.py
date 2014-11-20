@@ -65,6 +65,8 @@ def logdet_low_rank(Ainv, U, C, V, diag=False):
     :return:
     """
     Cinv = inv(C)
+    sC, ldC = slogdet(C)
+    assert sC > 0
 
     if diag:
         ldA = -log(Ainv).sum()
@@ -81,6 +83,4 @@ def logdet_low_rank(Ainv, U, C, V, diag=False):
         s1, ld1 = slogdet(Cinv + V.dot(Ainv).dot(U))
         assert s1 > 0
 
-    sC, ldC = slogdet(C)
-    assert sC > 0
     return  ld1 + ldC + ldA

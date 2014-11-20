@@ -54,4 +54,4 @@ for i in range(100):
     print "A:\t", inf_model.A
     inf_model.resample(xy)
     l_inf[0].set_data([0, inf_model.A[0]], [0, inf_model.A[1]])
-    plt.pause(0.1)
+    plt.pause(0.01)

@@ -9,7 +9,7 @@ def test_ss_nbregression(do_plot=False):
     b = np.array([-1.0])
     w = np.ones((D,))
     # A = np.ones(D)
-    A = np.array([1,0])
+    A = np.random.rand(D) < 0.05
     sigma =  0.1 * np.ones((1,1))
 
     # Make regression models for each dimension
@@ -22,7 +22,7 @@ def test_ss_nbregression(do_plot=False):
     datasets = 1
     Xss = []
     ys = []
-    T = 1000
+    T = 10000
     for i in range(datasets):
         X = np.random.normal(size=(T,D))
         Xs = [X[:,d].reshape((T,1)) for d in range(D)]
@@ -62,6 +62,9 @@ def test_ss_nbregression(do_plot=False):
     for Xs,y in zip(Xss, ys):
         inf_model.add_data(Xs, y)
 
+    # Prepare samples
+    A_samples = []
+
     if do_plot:
         # Plot the initial sample
         l_inf = plt.plot([0, inf_model.As[0] * inf_regression_models[0].A[0]],
@@ -79,6 +82,8 @@ def test_ss_nbregression(do_plot=False):
             print "bias:\t", inf_model.bias
             print "sigma:\t", inf_model.sigma
 
+            A_samples.append(inf_model.As.copy())
+
             l_inf[0].set_data([0, inf_model.As[0] * inf_regression_models[0].A[0]],
                               [0, inf_model.As[1] * inf_regression_models[1].A[0]])
             plt.pause(0.1)
@@ -93,6 +98,8 @@ def test_ss_nbregression(do_plot=False):
             print "Iteration ", i
             inf_model.resample()
 
+            A_samples.append(inf_model.As.copy())
+
         # END Profiling
         pr.disable()
 
@@ -102,4 +109,10 @@ def test_ss_nbregression(do_plot=False):
         ps.print_stats()
         print s.getvalue()
 
-test_ss_nbregression(do_plot=False)
+    # Print posterior mean
+    A_mean = np.array(A_samples).mean(axis=0)
+    print "A_true: ", A.astype(np.float)
+    print "A_inf: ", A_mean
+
+
+test_ss_nbregression(do_plot=True)
