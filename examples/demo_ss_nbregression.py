@@ -2,7 +2,7 @@ import numpy as np
 from eigenglm.nbregression import ScalarRegressionFixedCov, SpikeAndSlabNegativeBinomialRegression
 from eigenglm.deps.pybasicbayes.distributions import GaussianFixedCov, GaussianFixedMean
 
-def test_ss_nbregression():
+def test_ss_nbregression(do_plot=False):
     # Make a model
     D = 2
     xi = 10
@@ -22,7 +22,7 @@ def test_ss_nbregression():
     datasets = 1
     Xss = []
     ys = []
-    T = 100
+    T = 1000
     for i in range(datasets):
         X = np.random.normal(size=(T,D))
         Xs = [X[:,d].reshape((T,1)) for d in range(D)]
@@ -47,7 +47,6 @@ def test_ss_nbregression():
     # Plot A
     l_true = plt.plot([0, A[0] * w[0]], [0, A[1] * w[1]], ':k')
 
-
     # Fit with the same model
     inf_noise_model  = GaussianFixedMean(mu=np.zeros(1,), nu_0=1, lmbda_0=np.eye(1))
     inf_bias_model = GaussianFixedCov(mu_0=np.zeros((1,)), lmbda_0=np.ones((1,1)), sigma=inf_noise_model.sigma)
@@ -63,25 +62,44 @@ def test_ss_nbregression():
     for Xs,y in zip(Xss, ys):
         inf_model.add_data(Xs, y)
 
-    # Plot the initial sample
-    l_inf = plt.plot([0, inf_model.As[0] * inf_regression_models[0].A[0]],
-                     [0, inf_model.As[1] * inf_regression_models[1].A[0]], '-k')
+    if do_plot:
+        # Plot the initial sample
+        l_inf = plt.plot([0, inf_model.As[0] * inf_regression_models[0].A[0]],
+                         [0, inf_model.As[1] * inf_regression_models[1].A[0]], '-k')
 
-    plt.ion()
-    plt.show()
+        plt.ion()
+        plt.show()
 
-    # MCMC
-    raw_input("pause\n")
-    for i in range(100):
-        inf_model.resample()
-        print "ll:\t", inf_model.log_likelihood(Xs, y)
-        print "A:\t", inf_model.As
-        print "bias:\t", inf_model.bias
-        print "sigma:\t", inf_model.sigma
+        # MCMC
+        raw_input("Press any key to continue...\n")
+        for i in range(100):
+            inf_model.resample()
+            print "ll:\t", inf_model.log_likelihood(Xs, y)
+            print "A:\t", inf_model.As
+            print "bias:\t", inf_model.bias
+            print "sigma:\t", inf_model.sigma
 
-        l_inf[0].set_data([0, inf_model.As[0] * inf_regression_models[0].A[0]],
-                          [0, inf_model.As[1] * inf_regression_models[1].A[0]])
-        plt.pause(0.1)
+            l_inf[0].set_data([0, inf_model.As[0] * inf_regression_models[0].A[0]],
+                              [0, inf_model.As[1] * inf_regression_models[1].A[0]])
+            plt.pause(0.1)
+    else:
+        # Profile instead of plot
+        import cProfile, StringIO, pstats
+        pr = cProfile.Profile()
+        pr.enable()
 
+        # MCMC
+        for i in range(100):
+            print "Iteration ", i
+            inf_model.resample()
 
-test_ss_nbregression()
+        # END Profiling
+        pr.disable()
+
+        s = StringIO.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+        ps.print_stats()
+        print s.getvalue()
+
+test_ss_nbregression(do_plot=False)

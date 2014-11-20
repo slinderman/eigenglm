@@ -186,13 +186,32 @@ class ScalarRegressionFixedCov(GibbsSampling, Collapsed):
             X,y = data[:,:-1], data[:,-1]
 
             # TODO: Implement this with matrix inversion lemma
-            # Compute the marginal distribution parameters
-            mu_marg = X.dot(self.mu_A.T).reshape((N,))
-            # Covariances add
-            Sig_marg = np.asscalar(self.sigma) * np.eye(N) + X.dot(self.Sigma_A.dot(X.T))
+            use_mi_lemma = True
+            if use_mi_lemma:
+                # Compute log marginal likelihood with matrix inversion lemma
 
-            # Compute the marginal log likelihood
-            return GaussianFixed(mu_marg, Sig_marg).log_likelihood(y)
+                # Compute the marginal distribution parameters
+                mu_marg = X.dot(self.mu_A.T).reshape((N,))
+
+                from utils.utils import invert_low_rank, det_low_rank, logdet_low_rank
+                # Ainv = 1.0/np.asscalar(self.sigma) * np.eye(N)
+                Ainv = 1.0/np.asscalar(self.sigma) * np.ones((N,))
+
+                Sig_marg_inv = invert_low_rank(Ainv, X, self.Sigma_A, X.T, diag=True)
+                yy = y-mu_marg
+                out = -1./2. * (yy.T).dot(Sig_marg_inv).dot(yy) \
+                      - N/2*np.log(2*np.pi) \
+                      - 0.5 * logdet_low_rank(Ainv, X, self.Sigma_A, X.T, diag=True)
+
+            else:
+                # Compute the marginal distribution parameters
+                mu_marg = X.dot(self.mu_A.T).reshape((N,))
+                # Covariances add
+                Sig_marg = np.asscalar(self.sigma) * np.eye(N) + X.dot(self.Sigma_A.dot(X.T))
+
+                # Compute the marginal log likelihood
+                out = GaussianFixed(mu_marg, Sig_marg).log_likelihood(y)
+            return out
         else:
             raise Exception("Data must be list of numpy arrays or numpy array")
 
@@ -318,6 +337,7 @@ class SpikeAndSlabNegativeBinomialRegression(GibbsSampling):
     use the Polya-gamma auxiliary variable trick.
 
     y_n ~ NB(xi, p_n)
+    p_n = exp(psi_n) / (1+ exp(psi_n))
     p_n = exp(psi_n) / (1+ exp(psi_n))
     psi_n = bias + sum_{m} A_m * X_m * w_m + phi * N(0,1)
 
