@@ -33,6 +33,40 @@ def invert_low_rank(Ainv, U, C, V, diag=False):
         tmp = solve(Cinv + V.dot(Ainv).dot(U), V.dot(Ainv))
         return Ainv - Ainv.dot(U).dot(tmp)
 
+def quad_form_diag_plus_lr(x, d, U, C, V):
+    """
+    Compute the quadratic form: x^T Q^{-1} x where Q = (diag(d) + UCV
+    By the matrix inversion lemma, we can avoid computing matrix prods
+    with the full rank matrix
+
+    :param x:
+    :param d:
+    :param U:
+    :param C:
+    :param V:
+    :return:
+    """
+    N,K = U.shape
+    Cinv = inv(C)
+
+    assert d.shape == (N,)
+    D = 1.0/d
+
+
+    # Compute x^T D
+    xD = x*D                                # N
+    # Compute x^T D x
+    xDx = einsum('i,i', xD, x)              # 1 x 1
+
+    # Compute the inner terms
+    VDx = einsum('ij,j->i', V, xD)          # K x 1
+    xDU = einsum('i,ij->j', xD,U)           # 1 x K
+    VDU = einsum('ij,j,jk->ik', V, D, U)    # K x K
+    WVDx = solve(Cinv + VDU, VDx)           # K x 1
+    xDUWVDx = einsum('i,i', xDU, WVDx) # 1 x 1
+
+    return xDx - xDUWVDx
+
 def det_low_rank(Ainv, U, C, V, diag=False):
     """
 

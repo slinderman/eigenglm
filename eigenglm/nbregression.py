@@ -193,13 +193,15 @@ class ScalarRegressionFixedCov(GibbsSampling, Collapsed):
                 # Compute the marginal distribution parameters
                 mu_marg = X.dot(self.mu_A.T).reshape((N,))
 
-                from utils.utils import invert_low_rank, det_low_rank, logdet_low_rank
+                from utils.utils import invert_low_rank, det_low_rank, logdet_low_rank, quad_form_diag_plus_lr
                 # Ainv = 1.0/np.asscalar(self.sigma) * np.eye(N)
-                Ainv = 1.0/np.asscalar(self.sigma) * np.ones((N,))
+                d = np.asscalar(self.sigma) * np.ones((N,))
+                Ainv = 1.0/d
 
-                Sig_marg_inv = invert_low_rank(Ainv, X, self.Sigma_A, X.T, diag=True)
+                # Sig_marg_inv = invert_low_rank(Ainv, X, self.Sigma_A, X.T, diag=True)
                 yy = y-mu_marg
-                out = -1./2. * (yy.T).dot(Sig_marg_inv).dot(yy) \
+                tmp = -1./2. * quad_form_diag_plus_lr(yy, d, X, self.Sigma_A, X.T)
+                out = tmp \
                       - N/2*np.log(2*np.pi) \
                       - 0.5 * logdet_low_rank(Ainv, X, self.Sigma_A, X.T, diag=True)
 
